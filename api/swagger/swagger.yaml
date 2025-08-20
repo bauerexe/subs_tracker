@@ -1,0 +1,194 @@
+swagger: "2.0"
+info:
+  version: "1.0.0"
+  title: "Subscriptions API"
+host: "127.0.0.1:8080"
+basePath: "/api/v1"
+schemes:
+  - http
+
+tags:
+  - name: subscriptions
+    description: Управление подписками пользователей
+
+paths:
+  /subscriptions:
+    get:
+      tags: [subscriptions]
+      summary: List subscriptions
+      parameters:
+        - name: user_id
+          in: query
+          type: string
+        - name: service_name
+          in: query
+          type: string
+        - name: start_date
+          in: query
+          type: string
+          format: '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+        - name: end_date
+          in: query
+          type: string
+          format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+      responses:
+        200:
+          description: OK
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Subscription"
+    post:
+      tags: [subscriptions]
+      summary: Create subscription
+      parameters:
+        - in: body
+          name: sub
+          required: true
+          schema:
+            $ref: "#/definitions/SubscriptionInput"
+      responses:
+        201:
+          description: Created
+          schema:
+            $ref: "#/definitions/Subscription"
+
+  /subscriptions/{id}:
+    get:
+      tags: [subscriptions]
+      summary: Get subscription by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/Subscription"
+    put:
+      tags: [subscriptions]
+      summary: Update subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - in: body
+          name: sub
+          required: true
+          schema:
+            $ref: "#/definitions/SubscriptionInput"
+      responses:
+        200:
+          description: Updated
+          schema:
+            $ref: "#/definitions/Subscription"
+    delete:
+      tags: [subscriptions]
+      summary: Delete subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        200:
+          description: Deleted
+          schema:
+            $ref: "#/definitions/Subscription"
+
+  /subscriptions/cost:
+    get:
+      tags: [subscriptions]
+      summary: Get total cost
+      parameters:
+        - name: user_id
+          in: query
+          type: string
+        - name: service_name
+          in: query
+          type: string
+        - name: start_date
+          in: query
+          type: string
+          format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+          required: true
+        - name: end_date
+          in: query
+          type: string
+          format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+          required: true
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/SubscriptionsCost"
+
+definitions:
+  SubscriptionInput:
+    type: object
+    required: [service_name, cost, user_id, start_date]
+    properties:
+      service_name:
+        type: string
+        minLength: 1
+        example: "Yandex Plus"
+      cost:
+        type: integer
+        minLength: 1
+        example: 400
+      user_id:
+        type: string
+        format: uuid
+        example: "60601fee-2bf1-4721-ae6f-7636e79a0cba"
+      start_date:
+        type: string
+        format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+        example: "07-2025"
+      end_date:
+        type: string
+        format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+        example: "12-2025"
+  Subscription:
+    allOf:
+      - $ref: "#/definitions/SubscriptionInput"
+      - $ref:  "#/definitions/SubscriptionId"
+  SubscriptionId:
+    type: object
+    properties:
+      id:
+        type: integer
+        example: 42
+  SubscriptionsCost:
+    type: object
+    properties:
+      total:
+        type: integer
+        example: 1200
+  Period:
+    type: object
+    description: Период MM-YYYY (границы включительно)
+    properties:
+      start_date:
+        type: string
+        pattern: '^(0[1-9]|1[0-2])-\d{4}$'
+        example: "07-2025"
+      end_date:
+        type: string
+        pattern: '^(0[1-9]|1[0-2])-\d{4}$'
+        example: "12-2025"
+  SubscriptionsFilter:
+    type: object
+    description: Общий фильтр для выборок/агрегаций подписок
+    properties:
+      user_id:
+        type: string
+        format: uuid
+        example: "60601fee-2bf1-4721-ae6f-7636e79a0cba"
+      service_name:
+        type: string
+        example: "Yandex Plus"
+      period:
+        $ref: "#/definitions/Period"

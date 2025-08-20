@@ -1,0 +1,15 @@
+env: "local"
+http_server:
+  host: "0.0.0.0" # для локального запуска без контейнера - "localhost"
+  port: 8080
+  timeout: 4s
+postgres:
+  host: "postgres"   # для локального запуска без контейнера - host: "localhost"
+  port: ${PG_PORT_CONTAINER}  # для локального запуска без контейнера - port: ${PG_PORT_HOST}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  db: ${POSTGRES_DB}
+  cors_origins:
+    - "http://localhost:8082"
+    - "http://127.0.0.1:8082"
+  sslmode: "disable"

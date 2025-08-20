@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: subs_pg
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${PG_PORT_HOST}:${PG_PORT_CONTAINER}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  adminer:
+    image: adminer:latest
+    container_name: subs_adminer
+    depends_on:
+      - postgres
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_PORT_HOST}:${ADMINER_PORT_CONTAINER}"
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:4
+    entrypoint: [ "migrate" ]
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - postgres
+    restart: "no"
+  tests:
+    image: golang:1.24
+    container_name: subs_tests
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+    environment:
+      CONFIG_PATH: .env/local.yaml
+      CONFIG_PG_PATH: .env/local_pg.env
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      TESTCONTAINERS_DOCKER_SWARM_DISABLED: "true"
+    command: >
+      sh -c "
+        go test ./... -v
+      "
+  swagger:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "${SWAGGER_PORT_HOST}:${SWAGGER_PORT_CONTAINER}"
+    environment:
+      SWAGGER_JSON: /api/swagger.yaml
+    volumes:
+      - ./api/swagger/swagger.yaml:/api/swagger.yaml:ro
+    depends_on:
+      - app
+  app:
+    build:
+      context: .
+    depends_on:
+      tests:
+        condition: service_completed_successfully
+    ports:
+      - "${APP_PORT_HOST}:${APP_PORT_CONTAINER}"
+    environment:
+      CONFIG_PATH: /app/.env/local.yaml
+      CONFIG_PG_PATH: /app/.env/local_pg.env
+    volumes:
+      - ./.env/local.yaml:/app/.env/local.yaml:ro
+      - ./.env/local_pg.env:/app/.env/local_pg.env:ro
+    restart: unless-stopped
+
+volumes:
+  pg_data:
