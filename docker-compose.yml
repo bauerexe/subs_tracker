@@ -49,6 +49,10 @@ services:
       TESTCONTAINERS_DOCKER_SWARM_DISABLED: "true"
     command: >
       sh -c "
+        go env -w GOPROXY=https://proxy.golang.org,direct &&
+        go mod tidy &&
+        go mod download &&
+        go mod verify &&
         go test ./... -v
       "
   swagger:
