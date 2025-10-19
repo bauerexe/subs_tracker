@@ -2,13 +2,13 @@ version: "2"
 sql:
   - engine: postgresql
     schema:
-      - migrations/001_create_subscriptions.up.sql
+      - ../../../../../migrations/001_create_subscriptions.up.sql
     queries:
-      - internal/repository/subscription/postgres/sqlc/queries.sql
+      - queries.sql
     gen:
       go:
         package: sqlc
-        out: internal/repository/subscription/postgres/sqlc
+        out: .
         sql_package: pgx/v5
         emit_json_tags: true
         overrides:
