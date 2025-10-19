@@ -124,21 +124,36 @@ func (s *Subscription) validateAndNormalize(sub *entity.Subscription) error {
 }
 
 func normalizeFilter(f SubFilter) (SubFilter, error) {
-	if f.Period == nil {
-		return f, nil
-	}
-	from := monthStart(f.Period.From)
-	to := monthStart(f.Period.To)
-	if from.IsZero() {
-		return f, fmt.Errorf("%w: empty period bound", ErrInvalidPeriod)
-	}
-	if !to.IsZero() {
-		if to.Before(from) {
-			return f, fmt.Errorf("%w: to < from", ErrInvalidPeriod)
+	if f.Period != nil {
+		from := monthStart(f.Period.From)
+		to := monthStart(f.Period.To)
+		if from.IsZero() {
+			return f, fmt.Errorf("%w: empty period bound", ErrInvalidPeriod)
 		}
+		if !to.IsZero() {
+			if to.Before(from) {
+				return f, fmt.Errorf("%w: to < from", ErrInvalidPeriod)
+			}
+		}
+
+		ff := f
+		ff.Period = &Period{From: from, To: to}
+		f = ff
+	}
+
+	if f.Offset < 0 {
+		return f, fmt.Errorf("%w: offset must be >= 0", ErrInvalidPagination)
+	}
+	limit := f.Limit
+	switch {
+	case limit <= 0:
+		limit = defaultListLimit
+	case limit > maxListLimit:
+		limit = maxListLimit
 	}
 
 	ff := f
-	ff.Period = &Period{From: from, To: to}
+	ff.Limit = limit
+	ff.Offset = f.Offset
 	return ff, nil
 }

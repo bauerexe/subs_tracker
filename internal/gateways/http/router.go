@@ -49,6 +49,8 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 		svc := c.Query("service_name")
 		fromStr := c.Query("start_date")
 		toStr := c.Query("end_date")
+		limitStr := c.Query("limit")
+		offsetStr := c.Query("offset")
 
 		var f usecase.SubFilter
 
@@ -66,6 +68,24 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 
 		if svc != "" {
 			f.ServiceName = &svc
+		}
+
+		if limitStr != "" {
+			limit, err := strconv.Atoi(limitStr)
+			if err != nil || limit < 0 {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid limit"})
+				return
+			}
+			f.Limit = limit
+		}
+
+		if offsetStr != "" {
+			offset, err := strconv.Atoi(offsetStr)
+			if err != nil || offset < 0 {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid offset"})
+				return
+			}
+			f.Offset = offset
 		}
 
 		if fromStr != "" || toStr != "" {
@@ -96,6 +116,9 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 			return
 		case errors.Is(err, usecase.ErrInvalidPeriod):
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
+			return
+		case errors.Is(err, usecase.ErrInvalidPagination):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid pagination"})
 			return
 		case err != nil:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -454,7 +477,14 @@ func setupSubscriptionsCost(r *gin.RouterGroup, u UseCases) {
 
 		total, err := u.Sub.CostSubsByFilter(c, f)
 
-		if err != nil {
+		switch {
+		case errors.Is(err, usecase.ErrInvalidPeriod):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
+			return
+		case errors.Is(err, usecase.ErrInvalidPagination):
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid pagination"})
+			return
+		case err != nil:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}

@@ -9,26 +9,24 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	f, err := os.Create("./example.yaml")
-	if err != nil {
-		t.Fatalf("failed to create tempfile: %v", err)
+	dir := t.TempDir()
+
+	cfgPath := filepath.Join(dir, "config.yaml")
+	envPath := filepath.Join(dir, "app.env")
+
+	if err := os.WriteFile(cfgPath, []byte("env: \"local\"\nhttp_server:\n  host: \"localhost\"\n  port: 8080\n  timeout: 4s\npostgres:\n  host: \"localhost\"\n  port: 5432\n  user: ${POSTGRES_USER}\n  password: ${POSTGRES_PASSWORD}\n  db: ${POSTGRES_DB}\n"), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
 	}
-	f_pg, err := os.Create("./example.env")
-	if err != nil {
-		t.Fatalf("failed to create tempfile: %v", err)
+
+	if err := os.WriteFile(envPath, []byte("POSTGRES_USER=subs_user\nPOSTGRES_PASSWORD=subs_password\nPOSTGRES_DB=subs_db\n"), 0o600); err != nil {
+		t.Fatalf("failed to write env: %v", err)
 	}
-	abs, err := filepath.Abs(f.Name())
-	abs_pg, _ := filepath.Abs(f_pg.Name())
 
-	defer os.RemoveAll(abs)
-	defer os.RemoveAll(abs_pg)
+	t.Setenv("CONFIG_PATH", cfgPath)
+	t.Setenv("ENV_FILE", envPath)
 
-	f.WriteString("env: \"local\"\nhttp_server:\n  host: \"localhost\"\n  port: 8080\n  timeout: 4s\npostgres:\n  host: \"localhost\"\n  port: 5432\n  user: ${POSTGRES_USER}\n  password: ${POSTGRES_PASSWORD}\n  db: ${POSTGRES_DB}\n  sslmode: \"disable\"")
-	f_pg.WriteString("POSTGRES_USER=subs_user\nPOSTGRES_PASSWORD=subs_password\nPOSTGRES_DB=subs_db\n\nPG_PORT_HOST=5432\nPG_PORT_CONTAINER=5432\n\nADMINER_PORT_HOST=8080\nADMINER_PORT_CONTAINER=8080\n")
-
-	t.Setenv("CONFIG_PATH", abs)
-	t.Setenv("CONFIG_PG_PATH", abs_pg)
 	cfg := LoadConfig()
+
 	assert.Equal(t, Config{
 		Env: "local",
 		Server: ServerConfig{
@@ -44,5 +42,4 @@ func TestLoadConfig(t *testing.T) {
 			Db:       "subs_db",
 		},
 	}, *cfg)
-
 }

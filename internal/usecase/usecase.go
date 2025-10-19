@@ -10,11 +10,18 @@ import (
 )
 
 //go:generate go run github.com/golang/mock/mockgen@v1.6.0 -destination=mock/usecase_mock.go -package=mock subs_tracker/internal/usecase SubscriptionRepository
+
 var (
 	ErrInvalidPeriod        = errors.New("invalid period")
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 	ErrInvalidSubscription  = errors.New("invalid subscription")
 	ErrInvalidID            = errors.New("invalid id")
+	ErrInvalidPagination    = errors.New("invalid pagination")
+)
+
+const (
+	defaultListLimit = 50
+	maxListLimit     = 200
 )
 
 // Period — период подписки
@@ -33,6 +40,10 @@ type SubFilter struct {
 	ServiceName *string
 	// Period - период который пропустит фильтр
 	Period *Period
+	// Limit - максимальное количество записей в ответе
+	Limit int
+	// Offset - смещение выборки
+	Offset int
 }
 
 // SubscriptionRepository — CRUD по подпискам + выборки/агрегаты.

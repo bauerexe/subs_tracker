@@ -284,7 +284,9 @@ func Test_subscription_CostSubsByFilter(t *testing.T) {
 
 		uc := NewSubscription(repo)
 
-		_, err := uc.CostSubsByFilter(ctx, SubFilter{})
+		period := &Period{From: time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)}
+
+		_, err := uc.CostSubsByFilter(ctx, SubFilter{Period: period})
 		assert.Error(t, err)
 	})
 
@@ -297,7 +299,9 @@ func Test_subscription_CostSubsByFilter(t *testing.T) {
 
 		uc := NewSubscription(repo)
 
-		sum, err := uc.CostSubsByFilter(ctx, SubFilter{})
+		period := &Period{From: time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)}
+
+		sum, err := uc.CostSubsByFilter(ctx, SubFilter{Period: period})
 		assert.NoError(t, err)
 		assert.Equal(t, int64(12345), sum)
 	})

@@ -1,0 +1,12 @@
+env: "local"
+http_server:
+  host: "0.0.0.0"
+  port: 8080
+  timeout: 5s
+postgres:
+  host: "postgres"
+  port: 5432
+  user: "subs_user"
+  password: "subs_password"
+  db: "subs_db"
+  

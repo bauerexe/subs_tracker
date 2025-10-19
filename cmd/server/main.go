@@ -6,12 +6,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"subs_tracker/internal/config"
 	httpGateway "subs_tracker/internal/gateways/http"
 	subsRepository "subs_tracker/internal/repository/subscription/postgres"
 	usecaseInternal "subs_tracker/internal/usecase"
+	"syscall"
 )
 
 const (
@@ -21,8 +23,8 @@ const (
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg := config.LoadConfig()
 	pgCfg := cfg.Pg
@@ -40,11 +42,8 @@ func main() {
 		pgCfg.Db)
 
 	pool, err := pgxpool.New(ctx, databaseUrl)
-
 	if err != nil {
-		log.Error("failed to init storage", slog.String(
-			"Error",
-			fmt.Sprint("error")))
+		log.Error("failed to init storage", slog.Any("error", err))
 		os.Exit(1)
 	}
 	defer pool.Close()
@@ -66,13 +65,13 @@ func main() {
 		httpGateway.WithTimeout(cfg.Server.Timeout),
 	)
 
-	log.Info("starting server", slog.String("address", cfg.Server.Host+":"+strconv.Itoa(cfg.Server.Port)))
-	err = server.Run()
-	if err != nil {
-		log.Error(err.Error())
+	addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
+	log.Info("starting server", slog.String("address", addr))
+	if err := server.Run(ctx); err != nil {
+		log.Error("server stopped with error", slog.Any("error", err))
 		return
 	}
-
+	log.Info("server stopped")
 }
 
 func setupLogger(env string) *slog.Logger {
@@ -88,6 +87,8 @@ func setupLogger(env string) *slog.Logger {
 		log = slog.New(
 			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
 		)
+	default:
+		log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	}
 	return log
 }

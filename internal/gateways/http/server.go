@@ -1,15 +1,17 @@
 package http
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log/slog"
+	"net/http"
 	"os"
 	cfg "subs_tracker/internal/config"
 	"subs_tracker/internal/gateways/http/mw"
 	"subs_tracker/internal/usecase"
-	"sync"
 	"time"
 )
 
@@ -20,12 +22,12 @@ const (
 )
 
 type Server struct {
-	host    string
-	port    uint16
-	wg      sync.WaitGroup
-	timeout time.Duration
-	router  *gin.Engine
-	log     *slog.Logger
+	host            string
+	port            uint16
+	shutdownTimeout time.Duration
+	router          *gin.Engine
+	log             *slog.Logger
+	srv             *http.Server
 }
 
 type UseCases struct {
@@ -36,16 +38,19 @@ func NewServer(useCases UseCases, cfg cfg.Config, log *slog.Logger, options ...f
 	r := SetupGin(cfg, useCases, log)
 
 	s := &Server{
-		host:   "localhost",
-		port:   8080,
-		router: r,
-		log: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		})),
+		host:            "localhost",
+		port:            8080,
+		router:          r,
+		log:             slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		shutdownTimeout: 5 * time.Second,
 	}
 
 	for _, o := range options {
 		o(s)
+	}
+
+	if s.shutdownTimeout <= 0 {
+		s.shutdownTimeout = 5 * time.Second
 	}
 
 	return s
@@ -53,25 +58,33 @@ func NewServer(useCases UseCases, cfg cfg.Config, log *slog.Logger, options ...f
 
 func WithHost(host string) func(*Server) {
 	return func(s *Server) {
-		s.host = host
+		if host != "" {
+			s.host = host
+		}
 	}
 }
 
 func WithPort(port uint16) func(*Server) {
 	return func(s *Server) {
-		s.port = port
+		if port != 0 {
+			s.port = port
+		}
 	}
 }
 
 func WithLogger(log *slog.Logger) func(*Server) {
 	return func(s *Server) {
-		s.log = log
+		if log != nil {
+			s.log = log
+		}
 	}
 }
 
 func WithTimeout(timeout time.Duration) func(server *Server) {
 	return func(s *Server) {
-		s.timeout = timeout
+		if timeout > 0 {
+			s.shutdownTimeout = timeout
+		}
 	}
 }
 
@@ -120,12 +133,48 @@ func buildAllowedOrigins(c cfg.Config) []string {
 		fmt.Sprintf("https://%s:%s", host, swPort),
 	}
 }
-func (s *Server) Run() error {
-	return s.router.Run(fmt.Sprintf("%s:%d", s.host, s.port))
+
+func (s *Server) Run(ctx context.Context) error {
+	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: s.router,
+	}
+	s.srv = srv
+
+	errCh := make(chan error, 1)
+	go func() {
+		s.log.Info("http server started", slog.String("addr", addr))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		close(errCh)
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
+		<-errCh
+		s.log.Info("server shutdown complete")
+		return nil
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
 func (s *Server) Close() error {
-	s.wg.Wait()
-	s.log.Info("Server closed successfully")
-	return nil
+	if s.srv == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
+	defer cancel()
+	return s.srv.Shutdown(ctx)
 }

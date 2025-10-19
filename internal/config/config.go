@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -37,11 +39,12 @@ func resolvePath(cwd, p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}
-	if up, ok := findUp(cwd, p, 8); ok { // ищем вверх: cwd/../../p
+	if up, ok := findUp(cwd, p, 8); ok {
 		return up
 	}
-	return filepath.Join(cwd, p) // как есть (на случай, если кладёшь рядом с пакетом)
+	return filepath.Join(cwd, p)
 }
+
 func findUp(start, rel string, max int) (string, bool) {
 	dir := start
 	for i := 0; i <= max; i++ {
@@ -62,32 +65,22 @@ func LoadConfig() *Config {
 	var cfg Config
 	cwd, _ := os.Getwd()
 
-	// 1) .env
-	envPath := os.Getenv("CONFIG_PG_PATH")
-	if envPath == "" {
-		if up, ok := findUp(cwd, ".env/local_pg.env", 8); ok {
-			envPath = up
-		}
-	} else {
-		envPath = resolvePath(cwd, envPath)
+	envFile := os.Getenv("ENV_FILE")
+	if envFile == "" {
+		envFile = ".env"
 	}
+	envPath := resolvePath(cwd, envFile)
 	if envPath != "" {
-		_ = godotenv.Overload(envPath)
+		if err := godotenv.Overload(envPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Fatalf("load env: %v", err)
+		}
 	}
 
-	// 2) YAML
 	path := os.Getenv("CONFIG_PATH")
 	if path == "" {
-		if up, ok := findUp(cwd, "configs/local.yaml", 8); ok {
-			path = up
-		} else if up, ok := findUp(cwd, ".env/local.yaml", 8); ok {
-			path = up
-		} else {
-			log.Fatal("CONFIG_PATH not set and local.yaml not found")
-		}
-	} else {
-		path = resolvePath(cwd, path)
+		path = "configs/local.yaml"
 	}
+	path = resolvePath(cwd, path)
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
