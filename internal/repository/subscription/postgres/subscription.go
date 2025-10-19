@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-openapi/strfmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"subs_tracker/internal/entity"
 	"subs_tracker/internal/repository/subscription/postgres/sqlc"
@@ -146,14 +147,17 @@ func (r *SubRepository) CostSubsByFilter(ctx context.Context, f usecase.SubFilte
 	}
 	params := sqlc.SumSubscriptionCostParams{
 		PeriodFrom: f.Period.From,
-		PeriodTo:   f.Period.To,
+		PeriodTo:   &f.Period.To,
 	}
-	if f.UserID.String() != "" {
-		uid := f.UserID.String()
-		params.UserID = &uid
+	uid, err := toPgUUID(f.UserID.String())
+	if err != nil {
+		return 0, err
 	}
+	params.UserID = uid
 	if f.ServiceName != nil {
-		params.ServiceName = f.ServiceName
+		params.ServiceName = pgtype.Text{
+			String: *f.ServiceName,
+		}
 	}
 	total, err := r.queries.SumSubscriptionCost(ctx, params)
 	if err != nil {
@@ -176,4 +180,12 @@ func toEntity(s sqlc.Subscription) *entity.Subscription {
 		DateFrom:    s.StartDate,
 		DateTo:      end,
 	}
+}
+
+func toPgUUID(s string) (pgtype.UUID, error) {
+	var u pgtype.UUID
+	if s == "" {
+		return pgtype.UUID{Valid: false}, nil
+	}
+	return u, u.Scan(s)
 }

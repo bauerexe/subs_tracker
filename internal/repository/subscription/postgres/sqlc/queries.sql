@@ -48,8 +48,8 @@ OFFSET sqlc.arg(page_offset);
 -- name: SumSubscriptionCost :one
 WITH params AS (
     SELECT
-        sqlc.arg(period_from) AS from_date,
-        sqlc.arg(period_to) AS to_date,
+        sqlc.arg(period_from) AS start_date,
+        sqlc.arg(period_to) AS end_date,
         sqlc.narg(user_id) AS user_id,
         sqlc.narg(service_name) AS service_name
 ),
@@ -57,8 +57,8 @@ filtered AS (
     SELECT s.*
     FROM subscriptions s
     CROSS JOIN params p
-    WHERE s.start_date <= p.to_date
-      AND (s.end_date IS NULL OR s.end_date >= p.from_date)
+    WHERE s.start_date <= p.end_date
+      AND (s.end_date IS NULL OR s.end_date >= p.start_date)
       AND (p.user_id IS NULL OR s.user_id = p.user_id)
       AND (p.service_name IS NULL OR s.service_name = p.service_name)
 ),
@@ -67,8 +67,8 @@ expanded AS (
     FROM filtered f
     CROSS JOIN params p
     CROSS JOIN LATERAL generate_series(
-        GREATEST(f.start_date, p.from_date),
-        LEAST(COALESCE(f.end_date, p.to_date), p.to_date),
+        GREATEST(f.start_date, p.start_date),
+        LEAST(COALESCE(f.end_date, p.end_date), p.end_date),
         interval '1 month'
     ) AS month_start
 )

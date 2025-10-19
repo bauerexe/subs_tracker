@@ -12,14 +12,22 @@ sql:
         sql_package: pgx/v5
         emit_json_tags: true
         overrides:
-          - db_type: "pg_catalog.uuid"
+          - db_type: "uuid"
             go_type:
-              type: string
-          - db_type: "pg_catalog.date"
-            nullable: true
-            go_type:
-              type: "*time.Time"
-          - db_type: "pg_catalog.date"
+              type: "string"
+
+          - db_type: "date"
             nullable: false
             go_type:
-              type: time.Time
+              import: "time"
+              type: "Time"
+          - db_type: "date"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+
+          - column: "public.subscriptions.cost"
+            go_type:
+              type: "int64"
