@@ -1,45 +1,61 @@
-# REST-сервис для агрегации данных об онлайн-подписках пользователей.
-env-переменные для локального запуска описаны в одном файле.
-Примеры файлов находятся в директории `.env` и имеют расширение `.example`.
-Перед запуском достаточно подготовить единый файл окружения для docker-compose:
+# Subs Tracker
 
-```
-cp .env/local.env.example .env/local.env
-```
+REST-сервис для управления подписками пользователей.
 
-Внутри файла можно указать все необходимые переменные, например:
+## Быстрый запуск
+1. Скопируйте шаблон окружения и при необходимости измените значения:
+   ```bash
+   cp .env/local.env.example .env/local.env
+   ```
+2. Запустите весь стек:
+   ```bash
+   make run_service
+   ```
+3. После старта контейнеров выполните миграции:
+   ```bash
+   make migrate-up
+   ```
+4. Используйте значения из `.env/local.env`. По умолчанию:
+   - приложение: `http://localhost:8080`
+   - Swagger UI: `http://localhost:8082`
+   - Adminer: `http://localhost:8081`
 
-```env
-APP_ENV=local
-HTTP_HOST=0.0.0.0
-HTTP_PORT=8080
-HTTP_TIMEOUT=5s
-HTTP_CORS_ORIGINS=http://localhost:8082,http://127.0.0.1:8082
+## Makefile
+| Цель | Назначение |
+|------|------------|
+| `run_service` | Собрать и запустить приложение вместе с БД, Adminer и Swagger UI. |
+| `up` | Поднять только PostgreSQL и Adminer в фоне. |
+| `down` | Остановить все контейнеры. |
+| `down-v` | Остановить контейнеры и удалить тома. |
+| `restart` | Перезапустить инфраструктуру (`down` + `up`). |
+| `migrate-up` | Применить все миграции. |
+| `migrate-down` | Откатить одну последнюю миграцию. |
 
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_USER=subs_user
-POSTGRES_PASSWORD=subs_password
-POSTGRES_DB=subs_db
-POSTGRES_SSLMODE=disable
+## Файл окружения `.env/local.env`
+| Переменная | Описание |
+|------------|----------|
+| `APP_ENV` | Текущий профиль запуска сервиса. |
+| `HTTP_HOST` | Адрес интерфейса, на котором слушает HTTP-сервер. |
+| `HTTP_PORT` | Порт HTTP-сервера внутри контейнера. |
+| `HTTP_TIMEOUT` | Таймаут обработки HTTP-запроса. |
+| `HTTP_CORS_ORIGINS` | Список доменов, которым разрешены CORS-запросы. |
+| `POSTGRES_HOST` | Хост PostgreSQL из контейнера приложения. |
+| `POSTGRES_PORT` | Порт PostgreSQL из контейнера приложения. |
+| `POSTGRES_USER` | Пользователь базы данных. |
+| `POSTGRES_PASSWORD` | Пароль пользователя базы данных. |
+| `POSTGRES_DB` | Имя базы данных. |
+| `POSTGRES_SSLMODE` | Режим SSL для подключения к PostgreSQL. |
+| `PG_PORT_HOST` | Порт PostgreSQL, проброшенный на хост (подключение `psql` к `localhost:$PG_PORT_HOST`). |
+| `PG_PORT_CONTAINER` | Внутренний порт PostgreSQL внутри docker-compose. |
+| `ADMINER_PORT_HOST` | Порт Adminer на хосте (`http://localhost:$ADMINER_PORT_HOST`). |
+| `ADMINER_PORT_CONTAINER` | Внутренний порт Adminer. |
+| `APP_PORT_HOST` | Порт приложения, проброшенный на хост. |
+| `APP_PORT_CONTAINER` | Внутренний порт приложения внутри docker-compose. |
+| `SWAGGER_PORT_HOST` | Порт Swagger UI на хосте (`http://localhost:$SWAGGER_PORT_HOST`). |
+| `SWAGGER_PORT_CONTAINER` | Внутренний порт Swagger UI. |
 
-PG_PORT_HOST=5433
-PG_PORT_CONTAINER=5432
-
-ADMINER_PORT_HOST=8081
-ADMINER_PORT_CONTAINER=8080
-
-APP_PORT_HOST=8080
-APP_PORT_CONTAINER=8080
-
-SWAGGER_PORT_HOST=8082
-SWAGGER_PORT_CONTAINER=8080
-```
-
-Запуск через контейнер:
-1. Указать желаемый путь к `ENV_FILE` в docker-compose.yml (по умолчанию используется `.env/local.env`).
-2. Запустить run_service в Makefile.
-3. Подождать полного запуска.
-4. Запустить migrate-up в Makefile.
-5. На localhost:8082 с дефолтными параметрами Swagger UI для ручного тестирования, с примерами запросов.
+## Полезные URL
+- Приложение: `http://localhost:${APP_PORT_HOST}`
+- Swagger UI: `http://localhost:${SWAGGER_PORT_HOST}`
+- Adminer: `http://localhost:${ADMINER_PORT_HOST}` (сервер `postgres`, пользователь `POSTGRES_USER`, пароль `POSTGRES_PASSWORD`)
 
