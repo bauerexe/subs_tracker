@@ -104,10 +104,10 @@ OFFSET $5
 `
 
 type ListSubscriptionsParams struct {
-	UserID      interface{} `json:"user_id"`
-	ServiceName interface{} `json:"service_name"`
-	PeriodFrom  interface{} `json:"period_from"`
-	PeriodTo    interface{} `json:"period_to"`
+	UserID      pgtype.UUID `json:"user_id"`
+	ServiceName pgtype.Text `json:"service_name"`
+	PeriodFrom  pgtype.Date `json:"period_from"`
+	PeriodTo    pgtype.Date `json:"period_to"`
 	PageOffset  int32       `json:"page_offset"`
 	PageLimit   int32       `json:"page_limit"`
 }
