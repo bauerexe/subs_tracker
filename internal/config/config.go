@@ -30,6 +30,7 @@ type PgConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Db       string `yaml:"db"`
+	SSLMode  string `yaml:"sslmode"`
 }
 
 func resolvePath(cwd, p string) string {
