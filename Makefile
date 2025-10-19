@@ -1,4 +1,4 @@
-ENV_FILE := .env/local_pg.env
+ENV_FILE := .env/local.env
 DC := docker compose --env-file $(ENV_FILE)
 
 include $(ENV_FILE)

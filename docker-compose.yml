@@ -41,8 +41,7 @@ services:
     depends_on:
       - postgres
     environment:
-      CONFIG_PATH: .env/local.yaml
-      CONFIG_PG_PATH: .env/local_pg.env
+      ENV_FILE: /app/.env/local.env
       DOCKER_HOST: unix:///var/run/docker.sock
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
       TESTCONTAINERS_RYUK_DISABLED: "true"
@@ -74,11 +73,9 @@ services:
     ports:
       - "${APP_PORT_HOST}:${APP_PORT_CONTAINER}"
     environment:
-      CONFIG_PATH: /app/.env/local.yaml
-      CONFIG_PG_PATH: /app/.env/local_pg.env
+      ENV_FILE: /app/.env/local.env
     volumes:
-      - ./.env/local.yaml:/app/.env/local.yaml:ro
-      - ./.env/local_pg.env:/app/.env/local_pg.env:ro
+      - ./.env/local.env:/app/.env/local.env:ro
     restart: unless-stopped
 
 volumes:
