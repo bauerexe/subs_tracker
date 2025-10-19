@@ -134,8 +134,8 @@ type ListSubscriptionsParams struct {
 	ServiceName *string
 	PeriodFrom  *time.Time
 	PeriodTo    *time.Time
-	Limit       int32
-	Offset      int32
+	PageLimit   int32
+	PageOffset  int32
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
@@ -161,8 +161,8 @@ func (q *Queries) ListSubscriptions(ctx context.Context, arg ListSubscriptionsPa
 		arg.ServiceName,
 		arg.PeriodFrom,
 		arg.PeriodTo,
-		arg.Limit,
-		arg.Offset,
+		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err

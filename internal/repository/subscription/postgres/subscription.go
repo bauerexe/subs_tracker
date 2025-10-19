@@ -108,8 +108,8 @@ func (r *SubRepository) ListSubsByFilter(ctx context.Context, f usecase.SubFilte
 	}
 
 	params := sqlc.ListSubscriptionsParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		PageLimit:  int32(limit),
+		PageOffset: int32(offset),
 	}
 	if f.UserID.String() != "" {
 		uid := f.UserID.String()

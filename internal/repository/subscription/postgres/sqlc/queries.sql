@@ -42,8 +42,8 @@ WHERE
         )
     )
 ORDER BY start_date, service_name, id
-LIMIT sqlc.arg(limit)
-OFFSET sqlc.arg(offset);
+LIMIT sqlc.arg(page_limit)
+OFFSET sqlc.arg(page_offset);
 
 -- name: SumSubscriptionCost :one
 WITH params AS (
