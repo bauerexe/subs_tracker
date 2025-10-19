@@ -126,12 +126,28 @@ func TestSubscriptionsRoutes(t *testing.T) {
 	t.Run("POST_subscriptions", func(t *testing.T) {
 		t.Run("valid_request_201", func(t *testing.T) {
 			body := `{
-				"service_name": "Yandex Plus",
-				"cost": 400,
+                                "service_name": "Yandex Plus",
+                                "cost": 400,
 				"user_id": "60601fee-2bf1-4721-ae6f-7636e79a0cba",
 				"start_date": "07-2025",
 				"end_date": "12-2025"
 			}`
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, base, bytes.NewBufferString(body))
+			req.Header.Add("Content-Type", "application/json")
+			router.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusCreated, w.Code)
+			assert.True(t, json.Valid(w.Body.Bytes()))
+		})
+
+		t.Run("valid_request_iso_dates_201", func(t *testing.T) {
+			body := `{
+                                "service_name": "Yandex Plus",
+                                "cost": 400,
+                                "user_id": "60601fee-2bf1-4721-ae6f-7636e79a0cba",
+                                "start_date": "2025-06-01",
+                                "end_date": "2025-12-01"
+                        }`
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodPost, base, bytes.NewBufferString(body))
 			req.Header.Add("Content-Type", "application/json")
@@ -362,6 +378,18 @@ func TestSubscriptionsCostRoute(t *testing.T) {
 	t.Run("GET_subscriptions_cost_success_200", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodGet, base+"?user_id=60601fee-2bf1-4721-ae6f-7636e79a0cba&start_date=07-2025&end_date=12-2025", nil)
+		req.Header.Add("Accept", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		if w.Body.Len() > 0 {
+			assert.True(t, json.Valid(w.Body.Bytes()))
+		}
+	})
+
+	t.Run("GET_subscriptions_cost_accepts_iso_dates_200", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, base+"?user_id=60601fee-2bf1-4721-ae6f-7636e79a0cba&start_date=2025-06-01&end_date=2025-12-01", nil)
 		req.Header.Add("Accept", "application/json")
 		router.ServeHTTP(w, req)
 

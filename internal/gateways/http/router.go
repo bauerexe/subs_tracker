@@ -15,11 +15,28 @@ import (
 )
 
 func parseMonthYear(s string) (time.Time, error) {
-	t, err := time.Parse("01-2006", s)
-	if err != nil {
-		return time.Time{}, err
+	s = strings.TrimSpace(s)
+	layouts := []string{
+		"01-2006",
+		"2006-01-02",
+		"2006-01",
 	}
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC), nil
+	var lastErr error
+	for _, layout := range layouts {
+		if layout == "" {
+			continue
+		}
+		t, err := time.Parse(layout, s)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC), nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("empty date value")
+	}
+	return time.Time{}, lastErr
 }
 
 func setupRouter(r *gin.Engine, u UseCases) {
@@ -439,11 +456,11 @@ func setupSubscriptionsCost(r *gin.RouterGroup, u UseCases) {
 		var err error
 
 		if fromTime, err = parseMonthYear(fromStr); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid from"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid start_date"})
 			return
 		}
 		if toTime, err = parseMonthYear(toStr); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid from"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid end_date"})
 			return
 		}
 		if fromTime.After(toTime) {

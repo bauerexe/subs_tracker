@@ -123,12 +123,12 @@ paths:
         - name: start_date
           in: query
           type: string
-          format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+          format:  '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'   # MM-YYYY or YYYY-MM(-DD)
           required: true
         - name: end_date
           in: query
           type: string
-          format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+          format:  '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'   # MM-YYYY or YYYY-MM(-DD)
           required: true
       responses:
         200:
@@ -155,11 +155,11 @@ definitions:
         example: "60601fee-2bf1-4721-ae6f-7636e79a0cba"
       start_date:
         type: string
-        format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+        format:  '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'   # MM-YYYY or YYYY-MM(-DD)
         example: "07-2025"
       end_date:
         type: string
-        format:  '^(0[1-9]|1[0-2])-\d{4}$'   # MM-YYYY
+        format:  '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'   # MM-YYYY or YYYY-MM(-DD)
         example: "12-2025"
   Subscription:
     allOf:
@@ -183,11 +183,11 @@ definitions:
     properties:
       start_date:
         type: string
-        pattern: '^(0[1-9]|1[0-2])-\d{4}$'
+        pattern: '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'
         example: "07-2025"
       end_date:
         type: string
-        pattern: '^(0[1-9]|1[0-2])-\d{4}$'
+        pattern: '^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$'
         example: "12-2025"
   SubscriptionsFilter:
     type: object
