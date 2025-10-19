@@ -89,13 +89,13 @@ const listSubscriptions = `-- name: ListSubscriptions :many
 SELECT id, user_id, service_name, cost, start_date, end_date
 FROM subscriptions
 WHERE
-    ($1 IS NULL OR user_id = $1)
-    AND ($2 IS NULL OR service_name = $2)
+    ($1::uuid IS NULL OR user_id = $1::uuid)
+    AND ($2::text IS NULL OR service_name = $2::text)
     AND (
-        $3 IS NULL
+        $3::date IS NULL
         OR (
-            (end_date IS NULL OR end_date >= $3)
-            AND ($4 IS NULL OR start_date <= $4)
+            (end_date IS NULL OR end_date >= $3::date)
+            AND ($4::date IS NULL OR start_date <= $4::date)
         )
     )
 ORDER BY start_date, service_name, id
@@ -149,10 +149,10 @@ func (q *Queries) ListSubscriptions(ctx context.Context, arg ListSubscriptionsPa
 const sumSubscriptionCost = `-- name: SumSubscriptionCost :one
 WITH params AS (
     SELECT
-        $1 AS start_date,
-        $2 AS end_date,
-        $3 AS user_id,
-        $4 AS service_name
+        $1::date AS start_date,
+        $2::date AS end_date,
+        $3::uuid AS user_id,
+        $4::text AS service_name
 ),
 filtered AS (
     SELECT s.id, s.user_id, s.service_name, s.cost, s.start_date, s.end_date

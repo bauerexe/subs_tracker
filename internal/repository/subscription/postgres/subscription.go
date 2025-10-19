@@ -165,7 +165,7 @@ func (r *SubRepository) CostSubsByFilter(ctx context.Context, f usecase.SubFilte
 	}
 	uid, err := toPgUUID(f.UserID.String())
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("cost subs by filter: %w", err)
 	}
 	params.UserID = uid
 	if f.ServiceName != nil {

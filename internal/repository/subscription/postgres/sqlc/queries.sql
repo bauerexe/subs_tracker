@@ -32,13 +32,13 @@ WHERE id = sqlc.arg(id);
 SELECT id, user_id, service_name, cost, start_date, end_date
 FROM subscriptions
 WHERE
-    (sqlc.narg(user_id) IS NULL OR user_id = sqlc.narg(user_id))
-    AND (sqlc.narg(service_name) IS NULL OR service_name = sqlc.narg(service_name))
+    (sqlc.narg(user_id)::uuid IS NULL OR user_id = sqlc.narg(user_id)::uuid)
+    AND (sqlc.narg(service_name)::text IS NULL OR service_name = sqlc.narg(service_name)::text)
     AND (
-        sqlc.narg(period_from) IS NULL
+        sqlc.narg(period_from)::date IS NULL
         OR (
-            (end_date IS NULL OR end_date >= sqlc.narg(period_from))
-            AND (sqlc.narg(period_to) IS NULL OR start_date <= sqlc.narg(period_to))
+            (end_date IS NULL OR end_date >= sqlc.narg(period_from)::date)
+            AND (sqlc.narg(period_to)::date IS NULL OR start_date <= sqlc.narg(period_to)::date)
         )
     )
 ORDER BY start_date, service_name, id
@@ -48,10 +48,10 @@ OFFSET sqlc.arg(page_offset);
 -- name: SumSubscriptionCost :one
 WITH params AS (
     SELECT
-        sqlc.arg(period_from) AS start_date,
-        sqlc.arg(period_to) AS end_date,
-        sqlc.narg(user_id) AS user_id,
-        sqlc.narg(service_name) AS service_name
+        sqlc.arg(period_from)::date AS start_date,
+        sqlc.arg(period_to)::date AS end_date,
+        sqlc.narg(user_id)::uuid AS user_id,
+        sqlc.narg(service_name)::text AS service_name
 ),
 filtered AS (
     SELECT s.*
