@@ -109,24 +109,38 @@ func (r *SubRepository) ListSubsByFilter(ctx context.Context, f usecase.SubFilte
 	}
 
 	params := sqlc.ListSubscriptionsParams{
-		PageLimit:  int32(limit),
-		PageOffset: int32(offset),
+		PageLimit:   int32(limit),
+		PageOffset:  int32(offset),
+		UserID:      pgtype.UUID{Valid: false},
+		ServiceName: pgtype.Text{Valid: false},
+		PeriodFrom:  pgtype.Date{Valid: false},
+		PeriodTo:    pgtype.Date{Valid: false},
 	}
 	if f.UserID.String() != "" {
-		uid := f.UserID.String()
-		params.UserID = &uid
+		uid, err := toPgUUID(f.UserID.String())
+		if err != nil {
+			return nil, fmt.Errorf("list subs by filter: %w", err)
+		}
+		params.UserID = uid
 	}
 	if f.ServiceName != nil {
-		params.ServiceName = f.ServiceName
+		params.ServiceName = pgtype.Text{
+			String: *f.ServiceName,
+			Valid:  true,
+		}
 	}
 	if f.Period != nil {
 		if !f.Period.From.IsZero() {
-			from := f.Period.From
-			params.PeriodFrom = &from
+			params.PeriodFrom = pgtype.Date{
+				Time:  f.Period.From,
+				Valid: true,
+			}
 		}
 		if !f.Period.To.IsZero() {
-			to := f.Period.To
-			params.PeriodTo = &to
+			params.PeriodTo = pgtype.Date{
+				Time:  f.Period.To,
+				Valid: true,
+			}
 		}
 	}
 
@@ -157,6 +171,7 @@ func (r *SubRepository) CostSubsByFilter(ctx context.Context, f usecase.SubFilte
 	if f.ServiceName != nil {
 		params.ServiceName = pgtype.Text{
 			String: *f.ServiceName,
+			Valid:  true,
 		}
 	}
 	total, err := r.queries.SumSubscriptionCost(ctx, params)
