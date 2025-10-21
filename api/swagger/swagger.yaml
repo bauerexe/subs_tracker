@@ -30,6 +30,8 @@ paths:
           type: integer
           format: int32
           minimum: 0
+          maximum: 200
+          default: 50
         - name: offset
           in: query
           description: "Смещение начала списка (по умолчанию используется значение сервиса)"
@@ -37,6 +39,7 @@ paths:
           type: integer
           format: int32
           minimum: 0
+          default: 0
         - name: start_date
           in: query
           type: string
@@ -206,3 +209,14 @@ definitions:
         example: "Yandex Plus"
       period:
         $ref: "#/definitions/Period"
+      limit:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 200
+        default: 50
+      offset:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
