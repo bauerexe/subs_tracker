@@ -60,7 +60,8 @@ REST-сервис для управления подписками пользо�
 - Adminer: `http://localhost:${ADMINER_PORT_HOST}` (сервер `postgres`, пользователь `POSTGRES_USER`, пароль `POSTGRES_PASSWORD`)
 
 ## Кодогенерация
-| Команда         | Где                           |
-|-----------------|-------------------------------|
-| `go generate`   | `internal/usecase/usecase.go` |
-| `sqlc generate` | терминал                      |
+| Команда         | Где                                      |
+|-----------------|------------------------------------------|
+| `go generate`   | `internal/usecase/usecase.go`            |
+| `sqlc generate` | терминал                                 | 
+|   `go:generate` | `internal/entity/generated/generated.go` |

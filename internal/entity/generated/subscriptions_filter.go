@@ -19,6 +19,15 @@ import (
 // swagger:model SubscriptionsFilter
 type SubscriptionsFilter struct {
 
+	// limit
+	// Maximum: 100
+	// Minimum: 0
+	Limit *int32 `json:"limit,omitempty"`
+
+	// offset
+	// Minimum: 0
+	Offset *int32 `json:"offset,omitempty"`
+
 	// period
 	Period *Period `json:"period,omitempty"`
 
@@ -36,6 +45,14 @@ type SubscriptionsFilter struct {
 func (m *SubscriptionsFilter) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateLimit(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateOffset(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validatePeriod(formats); err != nil {
 		res = append(res, err)
 	}
@@ -47,6 +64,34 @@ func (m *SubscriptionsFilter) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *SubscriptionsFilter) validateLimit(formats strfmt.Registry) error {
+	if swag.IsZero(m.Limit) { // not required
+		return nil
+	}
+
+	if err := validate.MinimumInt("limit", "body", int64(*m.Limit), 0, false); err != nil {
+		return err
+	}
+
+	if err := validate.MaximumInt("limit", "body", int64(*m.Limit), 100, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *SubscriptionsFilter) validateOffset(formats strfmt.Registry) error {
+	if swag.IsZero(m.Offset) { // not required
+		return nil
+	}
+
+	if err := validate.MinimumInt("offset", "body", int64(*m.Offset), 0, false); err != nil {
+		return err
+	}
+
 	return nil
 }
 

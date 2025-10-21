@@ -213,7 +213,7 @@ definitions:
         type: integer
         format: int32
         minimum: 0
-        maximum: 200
+        maximum: 100
         default: 50
       offset:
         type: integer
