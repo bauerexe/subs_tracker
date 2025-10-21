@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	cfg "subs_tracker/internal/config"
 	"subs_tracker/internal/gateways/http/mw"
 	"subs_tracker/internal/usecase"
-	"time"
 )
 
 const (

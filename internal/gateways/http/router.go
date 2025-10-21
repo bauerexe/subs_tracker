@@ -3,16 +3,17 @@ package http
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/go-openapi/strfmt"
-	"github.com/google/uuid"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-openapi/strfmt"
+	"github.com/google/uuid"
 	"subs_tracker/internal/entity"
 	"subs_tracker/internal/entity/generated"
 	"subs_tracker/internal/usecase"
-	"time"
 )
 
 // parseMonthYear parses several date layouts and normalizes to the first day of the month (UTC).

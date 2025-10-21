@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"subs_tracker/internal/config"
 	httpGateway "subs_tracker/internal/gateways/http"
 	subsRepository "subs_tracker/internal/repository/subscription/postgres"
 	usecaseInternal "subs_tracker/internal/usecase"
-	"syscall"
 )
 
 const (

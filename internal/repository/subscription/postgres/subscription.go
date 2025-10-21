@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/go-openapi/strfmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"subs_tracker/internal/entity"
 	"subs_tracker/internal/repository/subscription/postgres/sqlc"
 	"subs_tracker/internal/usecase"
-	"time"
 )
 
 // SubRepository wraps a pgx pool and sqlc-generated Queries to persist subscriptions

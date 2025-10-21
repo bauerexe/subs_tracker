@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"subs_tracker/internal/entity"
 	"time"
+
+	"subs_tracker/internal/entity"
 )
 
 // Subscription coordinates subscription use cases via the repository

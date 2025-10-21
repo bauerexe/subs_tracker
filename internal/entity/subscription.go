@@ -1,8 +1,9 @@
 package entity
 
 import (
-	"github.com/go-openapi/strfmt"
 	"time"
+
+	"github.com/go-openapi/strfmt"
 )
 
 // Subscription - entity with subscription information
