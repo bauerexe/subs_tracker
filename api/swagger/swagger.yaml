@@ -25,14 +25,18 @@ paths:
           type: string
         - name: limit
           in: query
-          type: integer
-          minimum: 0
           description: "Количество элементов в выдаче (по умолчанию используется значение сервиса)"
+          required: false
+          type: integer
+          format: int32
+          minimum: 0
         - name: offset
           in: query
-          type: integer
-          minimum: 0
           description: "Смещение начала списка (по умолчанию используется значение сервиса)"
+          required: false
+          type: integer
+          format: int32
+          minimum: 0
         - name: start_date
           in: query
           type: string

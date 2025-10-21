@@ -21,12 +21,12 @@ type Period struct {
 
 	// end date
 	// Example: 12-2025
-	// Pattern: ^(0[1-9]|1[0-2])-\d{4}$
+	// Pattern: ^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$
 	EndDate string `json:"end_date,omitempty"`
 
 	// start date
 	// Example: 07-2025
-	// Pattern: ^(0[1-9]|1[0-2])-\d{4}$
+	// Pattern: ^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$
 	StartDate string `json:"start_date,omitempty"`
 }
 
@@ -53,7 +53,7 @@ func (m *Period) validateEndDate(formats strfmt.Registry) error {
 		return nil
 	}
 
-	if err := validate.Pattern("end_date", "body", m.EndDate, `^(0[1-9]|1[0-2])-\d{4}$`); err != nil {
+	if err := validate.Pattern("end_date", "body", m.EndDate, `^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$`); err != nil {
 		return err
 	}
 
@@ -65,7 +65,7 @@ func (m *Period) validateStartDate(formats strfmt.Registry) error {
 		return nil
 	}
 
-	if err := validate.Pattern("start_date", "body", m.StartDate, `^(0[1-9]|1[0-2])-\d{4}$`); err != nil {
+	if err := validate.Pattern("start_date", "body", m.StartDate, `^(0[1-9]|1[0-2])-\d{4}$|^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$`); err != nil {
 		return err
 	}
 
