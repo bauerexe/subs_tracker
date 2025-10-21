@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// SubRepository wraps a pgx pool and sqlc-generated Queries to persist subscriptions
 type SubRepository struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
@@ -21,6 +22,7 @@ type SubRepository struct {
 
 const defaultListLimit = 50
 
+// NewSubRepository creates a repository bound to the given pgx connection pool
 func NewSubRepository(pool *pgxpool.Pool) *SubRepository {
 	return &SubRepository{
 		pool:    pool,
@@ -28,6 +30,7 @@ func NewSubRepository(pool *pgxpool.Pool) *SubRepository {
 	}
 }
 
+// SaveSub inserts a new subscription via sqlc and returns the created entity
 func (r *SubRepository) SaveSub(ctx context.Context, sub *entity.Subscription) (*entity.Subscription, error) {
 	if sub == nil {
 		return nil, fmt.Errorf("save sub: %w", usecase.ErrInvalidSubscription)
@@ -50,6 +53,7 @@ func (r *SubRepository) SaveSub(ctx context.Context, sub *entity.Subscription) (
 	return toEntity(out), nil
 }
 
+// UpdateSub updates an existing subscription by ID and reports not-found if no rows were affected
 func (r *SubRepository) UpdateSub(ctx context.Context, sub *entity.Subscription) error {
 	if sub == nil {
 		return fmt.Errorf("update sub: %w", usecase.ErrInvalidSubscription)
@@ -76,6 +80,7 @@ func (r *SubRepository) UpdateSub(ctx context.Context, sub *entity.Subscription)
 	return nil
 }
 
+// DeleteSub removes a subscription by ID and reports not-found if no rows were affected
 func (r *SubRepository) DeleteSub(ctx context.Context, id int64) error {
 	rows, err := r.queries.DeleteSubscription(ctx, id)
 	if err != nil {
@@ -87,6 +92,7 @@ func (r *SubRepository) DeleteSub(ctx context.Context, id int64) error {
 	return nil
 }
 
+// GetSubByID fetches a subscription by its ID, mapping pgx.ErrNoRows to a domain not-found error
 func (r *SubRepository) GetSubByID(ctx context.Context, id int64) (*entity.Subscription, error) {
 	sub, err := r.queries.GetSubscription(ctx, id)
 	if err != nil {
@@ -98,6 +104,7 @@ func (r *SubRepository) GetSubByID(ctx context.Context, id int64) (*entity.Subsc
 	return toEntity(sub), nil
 }
 
+// ListSubsByFilter converts a SubFilter to sqlc params (handling nullable fields) and returns matching rows
 func (r *SubRepository) ListSubsByFilter(ctx context.Context, f usecase.SubFilter) ([]*entity.Subscription, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -155,6 +162,7 @@ func (r *SubRepository) ListSubsByFilter(ctx context.Context, f usecase.SubFilte
 	return out, nil
 }
 
+// CostSubsByFilter validates the period and computes the total monthly cost using the aggregate sqlc query
 func (r *SubRepository) CostSubsByFilter(ctx context.Context, f usecase.SubFilter) (int64, error) {
 	if f.Period == nil || f.Period.From.IsZero() || f.Period.To.IsZero() {
 		return 0, fmt.Errorf("cost subs by filter: %w", usecase.ErrInvalidPeriod)
@@ -181,6 +189,7 @@ func (r *SubRepository) CostSubsByFilter(ctx context.Context, f usecase.SubFilte
 	return total, nil
 }
 
+// toEntity maps a sqlc row to the domain Subscription, handling a nullable end_date safely
 func toEntity(s sqlc.Subscription) *entity.Subscription {
 	var end *time.Time
 	if s.EndDate != nil {
@@ -197,6 +206,7 @@ func toEntity(s sqlc.Subscription) *entity.Subscription {
 	}
 }
 
+// toPgUUID parses a string UUID into pgtype.UUID, returning an invalid value when the input is empty
 func toPgUUID(s string) (pgtype.UUID, error) {
 	var u pgtype.UUID
 	if s == "" {

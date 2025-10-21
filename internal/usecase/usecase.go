@@ -9,7 +9,7 @@ import (
 	"subs_tracker/internal/entity"
 )
 
-//go:generate go run github.com/golang/mock/mockgen@v1.6.0 -destination=mock/usecase_mock.go -package=mock subs_tracker/internal/usecase SubscriptionRepository
+//go:generate go run github.com/golang/mock/mockgen@v1.6.0 -destination=usecase_mock.go -package=usecase subs_tracker/internal/usecase SubscriptionRepository
 
 var (
 	ErrInvalidPeriod        = errors.New("invalid period")
@@ -24,40 +24,40 @@ const (
 	maxListLimit     = 200
 )
 
-// Period — период подписки
+// Period — period od subscription
 type Period struct {
-	// From - время начала периода (включительно)
+	// From - start time of the period (inclusive)
 	From time.Time
-	// To - время конца периода (включительно)
+	// To - end time of the period (inclusive)
 	To time.Time
 }
 
-// SubFilter — общий фильтр для выборок/агрегаций.
+// SubFilter — common filter for queries/aggregations
 type SubFilter struct {
-	// UserID - идентификатор пользователя который пропустит фильтр
+	// UserID - ID of the user to filter by
 	UserID strfmt.UUID
-	// ServiceName - название сервиса который пропустит филтр
+	// ServiceName - service name to filter by
 	ServiceName *string
-	// Period - период который пропустит фильтр
+	// Period - period to filter by
 	Period *Period
-	// Limit - максимальное количество записей в ответе
+	// Limit - maximum number of records in the response
 	Limit int
-	// Offset - смещение выборки
+	// Offset - result set offset
 	Offset int
 }
 
-// SubscriptionRepository — CRUD по подпискам + выборки/агрегаты.
+// SubscriptionRepository — CRUD for subscriptions plus queries/aggregations
 type SubscriptionRepository interface {
-	// SaveSub - функция сохранения подписки
+	// SaveSub - save a subscription
 	SaveSub(ctx context.Context, s *entity.Subscription) (*entity.Subscription, error)
-	// UpdateSub - функция обновления данных подпски
+	// UpdateSub -  update subscription data
 	UpdateSub(ctx context.Context, s *entity.Subscription) error
-	// DeleteSub - функция удаления подписки
+	// DeleteSub - delete a subscription
 	DeleteSub(ctx context.Context, id int64) error
-	// GetSubByID - функция получения подписок по идентификатору подписки
+	// GetSubByID -  get a subscription by ID
 	GetSubByID(ctx context.Context, id int64) (*entity.Subscription, error)
-	// ListSubsByFilter - функция получения подписок по SubFilter - фильтру
+	// ListSubsByFilter - list subscriptions using SubFilter
 	ListSubsByFilter(ctx context.Context, f SubFilter) ([]*entity.Subscription, error)
-	// CostSubsByFilter - функция получения суммы стоимостей подписок по  SubFilter - фильтру
+	// CostSubsByFilter -  get total subscription cost using SubFilter
 	CostSubsByFilter(ctx context.Context, f SubFilter) (int64, error)
 }

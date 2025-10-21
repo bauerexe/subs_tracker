@@ -1,174 +1,89 @@
 package config
 
 import (
-	"errors"
-	"github.com/joho/godotenv"
-	"io/fs"
-	"log"
+	"fmt"
+	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
 
+// Config - structure with all info about db
 type Config struct {
-	Env    string       `yaml:"env" env-default:"development"`
-	Server ServerConfig `yaml:"http_server"`
-	Pg     PgConfig     `yaml:"postgres"`
+	Env    string `mapstructure:"APP_ENV"`
+	Server ServerConfig
+	Pg     PgConfig
 }
 
+// ServerConfig - structure with fields about server
 type ServerConfig struct {
-	Host        string        `yaml:"host"`
-	Port        int           `yaml:"port"`
-	Timeout     time.Duration `yaml:"timeout"`
-	CORSOrigins []string      `yaml:"cors_origins"`
+	Host        string        `mapstructure:"HTTP_HOST"`
+	Port        int           `mapstructure:"HTTP_PORT"`
+	Timeout     time.Duration `mapstructure:"HTTP_TIMEOUT"`
+	CORSOrigins []string      `mapstructure:"HTTP_CORS_ORIGINS"`
 }
 
+// PgConfig - structure with fields about postgres db
 type PgConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Db       string `yaml:"db"`
-	SSLMode  string `yaml:"sslmode"`
+	Host     string `mapstructure:"POSTGRES_HOST"`
+	Port     int    `mapstructure:"POSTGRES_PORT"`
+	User     string `mapstructure:"POSTGRES_USER"`
+	Password string `mapstructure:"POSTGRES_PASSWORD"`
+	Db       string `mapstructure:"POSTGRES_DB"`
+	SSLMode  string `mapstructure:"POSTGRES_SSLMODE"`
 }
 
-func resolvePath(cwd, p string) string {
+// LoadConfig - load config from ENV_FILE in env variable or default - .env/local.env
+func LoadConfig() (*Config, error) {
+	v := viper.New()
+
+	p := os.Getenv("ENV_FILE")
 	if p == "" {
-		return ""
+		p = "local.env"
 	}
-	if filepath.IsAbs(p) {
-		return p
-	}
-	if up, ok := findUp(cwd, p, 8); ok {
-		return up
-	}
-	return filepath.Join(cwd, p)
-}
 
-func findUp(start, rel string, max int) (string, bool) {
-	dir := start
-	for i := 0; i <= max; i++ {
-		p := filepath.Join(dir, rel)
-		if _, err := os.Stat(p); err == nil {
-			return p, true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", false
-}
+	v.SetConfigFile(p)
+	ext := strings.ToLower(filepath.Ext(p))
 
-func LoadConfig() *Config {
-	cwd, _ := os.Getwd()
-
-	envFile := os.Getenv("ENV_FILE")
-	if envFile == "" {
-		envFile = ".env/local.env"
+	if ext == ".env" || ext == "" {
+		v.SetConfigType("env")
 	}
-	envPath := resolvePath(cwd, envFile)
-	if envPath != "" {
-		if err := godotenv.Overload(envPath); err != nil {
-			var pathErr *fs.PathError
-			switch {
-			case errors.Is(err, fs.ErrNotExist):
-				// ignore missing file to allow running with predefined environment variables
-			case errors.As(err, &pathErr) && errors.Is(pathErr.Err, fs.ErrNotExist):
-				// ignore missing file
-			default:
-				log.Fatalf("load env: %v", err)
-			}
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("read config %q: %w", p, err)
+	}
+
+	v.AutomaticEnv()
+
+	timeout, err := time.ParseDuration(v.GetString("HTTP_TIMEOUT"))
+	if err != nil {
+		return nil, fmt.Errorf("parse HTTP_TIMEOUT: %w", err)
+	}
+
+	var cors []string
+	if s := v.GetString("HTTP_CORS_ORIGINS"); s != "" {
+		for _, it := range strings.Split(s, ",") {
+			cors = append(cors, strings.TrimSpace(it))
 		}
 	}
 
-	cfg := Config{
-		Env: getEnv("APP_ENV", "development"),
+	cfg := &Config{
+		Env: v.GetString("APP_ENV"),
 		Server: ServerConfig{
-			Host:        getEnv("HTTP_HOST", "0.0.0.0"),
-			Port:        getEnvInt("HTTP_PORT", 8080),
-			Timeout:     getEnvDuration("HTTP_TIMEOUT", 5*time.Second),
-			CORSOrigins: getEnvStringSlice("HTTP_CORS_ORIGINS"),
+			Host:        v.GetString("HTTP_HOST"),
+			Port:        v.GetInt("HTTP_PORT"),
+			Timeout:     timeout,
+			CORSOrigins: cors,
 		},
 		Pg: PgConfig{
-			Host:     getEnv("POSTGRES_HOST", "localhost"),
-			Port:     getEnvInt("POSTGRES_PORT", 5432),
-			User:     getEnvRequired("POSTGRES_USER"),
-			Password: getEnvRequired("POSTGRES_PASSWORD"),
-			Db:       getEnvRequired("POSTGRES_DB"),
-			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
+			Host:     v.GetString("POSTGRES_HOST"),
+			Port:     v.GetInt("POSTGRES_PORT"),
+			User:     v.GetString("POSTGRES_USER"),
+			Password: v.GetString("POSTGRES_PASSWORD"),
+			Db:       v.GetString("POSTGRES_DB"),
+			SSLMode:  v.GetString("POSTGRES_SSLMODE"),
 		},
 	}
-	return &cfg
-}
-
-func getEnv(key, def string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return def
-}
-
-func getEnvRequired(key string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	log.Fatalf("missing required env %s", key)
-	return ""
-}
-
-func getEnvInt(key string, def int) int {
-	value, ok := os.LookupEnv(key)
-	if !ok || strings.TrimSpace(value) == "" {
-		return def
-	}
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil {
-		log.Fatalf("parse int env %s: %v", key, err)
-	}
-	return parsed
-}
-
-func getEnvDuration(key string, def time.Duration) time.Duration {
-	value, ok := os.LookupEnv(key)
-	if !ok || strings.TrimSpace(value) == "" {
-		return def
-	}
-	parsed, err := time.ParseDuration(strings.TrimSpace(value))
-	if err != nil {
-		log.Fatalf("parse duration env %s: %v", key, err)
-	}
-	return parsed
-}
-
-func getEnvStringSlice(key string) []string {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		return nil
-	}
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	parts := strings.Split(trimmed, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		item := strings.TrimSpace(part)
-		if item != "" {
-			result = append(result, item)
-		}
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
+	return cfg, nil
 }

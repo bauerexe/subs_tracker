@@ -21,6 +21,7 @@ const (
 	envProd  = "prod"
 )
 
+// Server holds HTTP server address, router, logger, and graceful shutdown settings.
 type Server struct {
 	host            string
 	port            uint16
@@ -30,11 +31,13 @@ type Server struct {
 	srv             *http.Server
 }
 
+// UseCases bundles application use cases injected into HTTP handlers.
 type UseCases struct {
 	Sub *usecase.Subscription
 }
 
-func NewServer(useCases UseCases, cfg cfg.Config, log *slog.Logger, options ...func(server *Server)) *Server {
+// New constructs a Server with defaults, applies options, and wires the Gin router.
+func New(useCases UseCases, cfg cfg.Config, log *slog.Logger, options ...func(server *Server)) *Server {
 	r := SetupGin(cfg, useCases, log)
 
 	s := &Server{
@@ -56,6 +59,7 @@ func NewServer(useCases UseCases, cfg cfg.Config, log *slog.Logger, options ...f
 	return s
 }
 
+// WithHost returns an option that sets the server host.
 func WithHost(host string) func(*Server) {
 	return func(s *Server) {
 		if host != "" {
@@ -64,6 +68,7 @@ func WithHost(host string) func(*Server) {
 	}
 }
 
+// WithPort returns an option that sets the server port.
 func WithPort(port uint16) func(*Server) {
 	return func(s *Server) {
 		if port != 0 {
@@ -72,6 +77,7 @@ func WithPort(port uint16) func(*Server) {
 	}
 }
 
+// WithLogger returns an option that sets the server logger.
 func WithLogger(log *slog.Logger) func(*Server) {
 	return func(s *Server) {
 		if log != nil {
@@ -80,6 +86,7 @@ func WithLogger(log *slog.Logger) func(*Server) {
 	}
 }
 
+// WithTimeout returns an option that sets the graceful shutdown timeout.
 func WithTimeout(timeout time.Duration) func(server *Server) {
 	return func(s *Server) {
 		if timeout > 0 {
@@ -88,6 +95,7 @@ func WithTimeout(timeout time.Duration) func(server *Server) {
 	}
 }
 
+// SetupGin configures Gin mode, middleware, CORS, and routes from the provided config.
 func SetupGin(cfg cfg.Config, useCases UseCases, log *slog.Logger) *gin.Engine {
 	switch cfg.Env {
 	case envLocal:
@@ -118,6 +126,7 @@ func SetupGin(cfg cfg.Config, useCases UseCases, log *slog.Logger) *gin.Engine {
 	return r
 }
 
+// buildAllowedOrigins derives default allowed CORS origins from the server host and swagger port.
 func buildAllowedOrigins(c cfg.Config) []string {
 	host := c.Server.Host
 	if host == "" {
@@ -134,6 +143,7 @@ func buildAllowedOrigins(c cfg.Config) []string {
 	}
 }
 
+// Run starts the HTTP server, listens for context cancellation, and shuts down gracefully.
 func (s *Server) Run(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	srv := &http.Server{
@@ -170,6 +180,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
+// Close gracefully shuts down the underlying HTTP server if it is running.
 func (s *Server) Close() error {
 	if s.srv == nil {
 		return nil

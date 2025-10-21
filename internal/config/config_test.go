@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,9 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Setenv("ENV_FILE", envPath)
 
-	cfg := LoadConfig()
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
 
 	assert.Equal(t, Config{
 		Env: "local",

@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 )
 
+// RecoveryWithSlog returns a Gin middleware that recovers from panics in request
 func RecoveryWithSlog(l *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

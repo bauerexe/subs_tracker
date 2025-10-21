@@ -26,26 +26,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		_ = fmt.Errorf("error while load config: %w", err)
+		return
+	}
+
 	pgCfg := cfg.Pg
 	log := setupLogger(cfg.Env)
 
 	log.Info("starting subs tracker", slog.String("env", cfg.Env))
 	log.Debug("debug messages are enabled")
 
-	databaseUrl := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s",
-		pgCfg.User,
-		pgCfg.Password,
-		pgCfg.Host,
-		pgCfg.Port,
-		pgCfg.Db)
-
-	pool, err := pgxpool.New(ctx, databaseUrl)
-	if err != nil {
-		log.Error("failed to init storage", slog.Any("error", err))
-		os.Exit(1)
-	}
+	pool := initStorage(pgCfg, ctx, log)
 	defer pool.Close()
 
 	log.Debug("init database")
@@ -56,7 +49,7 @@ func main() {
 		Sub: usecaseInternal.NewSubscription(sr),
 	}
 
-	server := httpGateway.NewServer(useCases,
+	server := httpGateway.New(useCases,
 		*cfg,
 		log,
 		httpGateway.WithHost(cfg.Server.Host),
@@ -74,6 +67,25 @@ func main() {
 	log.Info("server stopped")
 }
 
+// initStorage - init postgres db
+func initStorage(pgCfg config.PgConfig, ctx context.Context, log *slog.Logger) *pgxpool.Pool {
+	databaseUrl := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s",
+		pgCfg.User,
+		pgCfg.Password,
+		pgCfg.Host,
+		pgCfg.Port,
+		pgCfg.Db)
+
+	pool, err := pgxpool.New(ctx, databaseUrl)
+	if err != nil {
+		log.Error("failed to init storage", slog.Any("error", err))
+		os.Exit(1)
+	}
+	return pool
+}
+
+// setupLogger - setup slog.Logger for logging
 func setupLogger(env string) *slog.Logger {
 	var log *slog.Logger
 	switch strings.ToLower(env) {

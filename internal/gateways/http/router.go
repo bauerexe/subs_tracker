@@ -14,18 +14,12 @@ import (
 	"time"
 )
 
+// parseMonthYear parses several date layouts and normalizes to the first day of the month (UTC).
 func parseMonthYear(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
-	layouts := []string{
-		"01-2006",
-		"2006-01-02",
-		"2006-01",
-	}
+	layouts := []string{"01-2006", "2006-01-02", "2006-01"}
 	var lastErr error
 	for _, layout := range layouts {
-		if layout == "" {
-			continue
-		}
 		t, err := time.Parse(layout, s)
 		if err != nil {
 			lastErr = err
@@ -39,78 +33,64 @@ func parseMonthYear(s string) (time.Time, error) {
 	return time.Time{}, lastErr
 }
 
+// setupRouter wires all routes and basic middleware.
 func setupRouter(r *gin.Engine, u UseCases) {
 	r.HandleMethodNotAllowed = true
-
 	r.Use(gin.Recovery())
+	r.GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "pong") })
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.String(http.StatusOK, "pong")
-	})
-
-	{
-		v1 := r.Group("api/v1/")
-		setupSubscription(v1, u)
-		setupSubscriptionsId(v1, u)
-		setupSubscriptionsCost(v1, u)
-	}
+	v1 := r.Group("api/v1/")
+	setupSubscription(v1, u)
+	setupSubscriptionsId(v1, u)
+	setupSubscriptionsCost(v1, u)
 }
 
+// setupSubscription registers list/create routes for subscriptions.
 func setupSubscription(r *gin.RouterGroup, u UseCases) {
 	r.GET("/subscriptions", func(c *gin.Context) {
 		if !requireAcceptJSON(c) {
 			return
 		}
 
-		uidStr := c.Query("user_id")
-		svc := c.Query("service_name")
-		fromStr := c.Query("start_date")
-		toStr := c.Query("end_date")
-		limitStr := c.Query("limit")
-		offsetStr := c.Query("offset")
-
 		var f usecase.SubFilter
 
-		var uid uuid.UUID
-		var err error
-
-		if uid, err = uuid.Parse(uidStr); err != nil && uidStr != "" {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "uuid invalid"})
-			return
-		}
-
-		if uid != uuid.Nil {
+		if uidStr := c.Query("user_id"); uidStr != "" {
+			uid, err := uuid.Parse(uidStr)
+			if err != nil {
+				jsonErr(c, http.StatusUnprocessableEntity, "uuid invalid")
+				return
+			}
 			f.UserID = strfmt.UUID(uid.String())
 		}
 
-		if svc != "" {
+		if svc := c.Query("service_name"); svc != "" {
 			f.ServiceName = &svc
 		}
 
-		if limitStr != "" {
-			limit, err := strconv.Atoi(limitStr)
-			if err != nil || limit < 0 {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid limit"})
+		if v := c.Query("limit"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				jsonErr(c, http.StatusUnprocessableEntity, "invalid limit")
 				return
 			}
-			f.Limit = limit
+			f.Limit = n
 		}
-
-		if offsetStr != "" {
-			offset, err := strconv.Atoi(offsetStr)
-			if err != nil || offset < 0 {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid offset"})
+		if v := c.Query("offset"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				jsonErr(c, http.StatusUnprocessableEntity, "invalid offset")
 				return
 			}
-			f.Offset = offset
+			f.Offset = n
 		}
 
+		fromStr, toStr := c.Query("start_date"), c.Query("end_date")
 		if fromStr != "" || toStr != "" {
 			var p usecase.Period
 			if fromStr != "" {
 				t, err := parseMonthYear(fromStr)
 				if err != nil {
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period: from"})
+					jsonErr(c, http.StatusUnprocessableEntity, "invalid period: from")
 					return
 				}
 				p.From = t
@@ -118,7 +98,7 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 			if toStr != "" {
 				t, err := parseMonthYear(toStr)
 				if err != nil {
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period: to"})
+					jsonErr(c, http.StatusUnprocessableEntity, "invalid period: to")
 					return
 				}
 				p.To = t
@@ -127,122 +107,74 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 		}
 
 		subs, err := u.Sub.ListSubsByFilter(c, f)
-		switch {
-		case errors.Is(err, usecase.ErrInvalidSubscription):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid subscriptions data"})
-			return
-		case errors.Is(err, usecase.ErrInvalidPeriod):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
-			return
-		case errors.Is(err, usecase.ErrInvalidPagination):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid pagination"})
-			return
-		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if handled := handleUsecaseErr(c, err); handled {
 			return
 		}
 
 		resp := make([]*generated.Subscription, 0, len(subs))
 		for _, s := range subs {
-			sn := s.ServiceName
-			cost := s.Cost
-
-			uidSF := strfmt.UUID(s.UserID.String())
-			df := s.DateFrom.Format("01-2006")
-			var dt string
-			if s.DateTo != nil {
-				dt = s.DateTo.Format("01-2006")
-			}
-
-			item := &generated.Subscription{
-				SubscriptionInput: generated.SubscriptionInput{
-					ServiceName: &sn,
-					Cost:        &cost,
-					UserID:      &uidSF,
-					StartDate:   &df,
-					EndDate:     dt,
-				},
-				SubscriptionID: generated.SubscriptionID{ID: s.ID},
-			}
-			resp = append(resp, item)
+			cp := s
+			item := buildSubDTO(cp)
+			resp = append(resp, &item)
 		}
-
 		c.JSON(http.StatusOK, resp)
 	})
 
 	r.POST("/subscriptions", func(c *gin.Context) {
-		if !requireAcceptJSON(c) {
-			return
-		}
-		if c.ContentType() != "" && c.ContentType() != "application/json" {
-			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "Use application/json"})
+		if !requireAcceptJSON(c) || !requireJSONContent(c) {
 			return
 		}
 
 		var input *generated.SubscriptionInput
-
 		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			jsonErr(c, http.StatusBadRequest, err.Error())
 			return
 		}
 		if err := input.Validate(strfmt.Default); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 
 		dateFrom, err := parseMonthYear(*input.StartDate)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, errors.New("invalid period: date from"))
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid period: date from")
 			return
 		}
 
-		var dateTo time.Time
-
-		subscription := &entity.Subscription{
-			ID:          0,
+		sub := &entity.Subscription{
 			UserID:      *input.UserID,
 			ServiceName: *input.ServiceName,
 			Cost:        *input.Cost,
 			DateFrom:    dateFrom,
 		}
 		if input.EndDate != "" {
-			dateTo, err = parseMonthYear(input.EndDate)
+			v, err := parseMonthYear(input.EndDate)
 			if err != nil {
-				c.JSON(http.StatusUnprocessableEntity, errors.New("invalid period: date to"))
+				jsonErr(c, http.StatusUnprocessableEntity, "invalid period: date to")
 				return
 			}
-			subscription.DateTo = &dateTo
+			sub.DateTo = &v
 		}
 
-		created, err := u.Sub.RegisterSub(c, subscription)
-
-		switch {
-		case errors.Is(err, usecase.ErrInvalidSubscription):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid subscriptions data"})
-			return
-		case errors.Is(err, usecase.ErrInvalidPeriod):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
-			return
-		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		case created == nil:
-			c.JSON(http.StatusCreated, gin.H{"error": "nil result from RegisterSub"})
+		created, err := u.Sub.RegisterSub(c, sub)
+		if handled := handleUsecaseErr(c, err); handled {
 			return
 		}
-		resp := generated.Subscription{
-			SubscriptionInput: *input,
-			SubscriptionID:    generated.SubscriptionID{ID: created.ID},
+		if created == nil {
+			jsonErr(c, http.StatusCreated, "nil result from RegisterSub")
+			return
 		}
-		c.JSON(http.StatusCreated, resp)
+		out := buildSubDTO(created)
+		c.JSON(http.StatusCreated, out)
 	})
 
 	r.OPTIONS("/subscriptions", func(c *gin.Context) {
-		c.Writer.Header().Set("Allow", "POST,OPTIONS,GET")
+		c.Header("Allow", "POST,OPTIONS,GET")
 		c.Status(http.StatusNoContent)
 	})
 }
 
+// setupSubscriptionsId registers get/update/delete by id routes.
 func setupSubscriptionsId(r *gin.RouterGroup, u UseCases) {
 	r.GET("/subscriptions/:id", func(c *gin.Context) {
 		if !requireAcceptJSON(c) {
@@ -250,133 +182,86 @@ func setupSubscriptionsId(r *gin.RouterGroup, u UseCases) {
 		}
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid id"})
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid id")
 			return
 		}
-
 		sub, err := u.Sub.GetSubByID(c, id)
-		switch {
-		case errors.Is(err, usecase.ErrInvalidID):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid id"})
-			return
-		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
-		case sub == nil:
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		if errors.Is(err, usecase.ErrInvalidID) {
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid id")
 			return
 		}
-
-		name := sub.ServiceName
-		cost := sub.Cost
-		uid := sub.UserID
-		df := sub.DateFrom.Format("01-2006")
-		var dt string
-		if sub.DateTo != nil {
-			dt = sub.DateTo.Format("01-2006")
+		if err != nil {
+			jsonErr(c, http.StatusInternalServerError, "internal error")
+			return
 		}
-
-		resp := generated.Subscription{
-			SubscriptionInput: generated.SubscriptionInput{
-				ServiceName: &name,
-				Cost:        &cost,
-				UserID:      &uid,
-				StartDate:   &df,
-				EndDate:     dt,
-			},
-			SubscriptionID: generated.SubscriptionID{ID: sub.ID},
+		if sub == nil {
+			jsonErr(c, http.StatusNotFound, "not found")
+			return
 		}
-		c.JSON(http.StatusOK, resp)
+		out := buildSubDTO(sub)
+		c.JSON(http.StatusOK, out)
 	})
 
 	r.PUT("/subscriptions/:id", func(c *gin.Context) {
-		if !requireAcceptJSON(c) {
-			return
-		}
-		if c.ContentType() != "" && c.ContentType() != "application/json" {
-			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": "Use application/json"})
+		if !requireAcceptJSON(c) || !requireJSONContent(c) {
 			return
 		}
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid id"})
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid id")
 			return
 		}
 
 		var input *generated.SubscriptionInput
 		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			jsonErr(c, http.StatusBadRequest, err.Error())
 			return
 		}
 		if err := input.Validate(strfmt.Default); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 
 		df, err := parseMonthYear(*input.StartDate)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period: date from"})
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid period: date from")
 			return
 		}
 
-		var newSub = entity.Subscription{
+		newSub := entity.Subscription{
 			ID:          id,
 			UserID:      *input.UserID,
 			ServiceName: *input.ServiceName,
 			Cost:        *input.Cost,
 			DateFrom:    df,
 		}
-
-		var dt *time.Time
 		if input.EndDate != "" {
 			v, err := parseMonthYear(input.EndDate)
 			if err != nil {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period: date to"})
+				jsonErr(c, http.StatusUnprocessableEntity, "invalid period: date to")
 				return
 			}
-			dt = &v
-			newSub.DateTo = dt
+			newSub.DateTo = &v
 		}
 
 		updated, err := u.Sub.UpdateSub(c, &newSub)
-
-		if errors.Is(err, usecase.ErrInvalidID) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid id"})
+		switch {
+		case errors.Is(err, usecase.ErrInvalidID):
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid id")
 			return
-		}
-		if errors.Is(err, usecase.ErrInvalidSubscription) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid subscriptions data"})
+		case errors.Is(err, usecase.ErrInvalidSubscription):
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid subscriptions data")
 			return
-		}
-		if errors.Is(err, usecase.ErrInvalidPeriod) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
+		case errors.Is(err, usecase.ErrInvalidPeriod):
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid period")
 			return
-		}
-		if err != nil || updated == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		case err != nil || updated == nil:
+			jsonErr(c, http.StatusNotFound, "not found")
 			return
 		}
 
-		name := updated.ServiceName
-		cost := updated.Cost
-		uid := updated.UserID
-		outDF := updated.DateFrom.Format("01-2006")
-		var outDT string
-		if updated.DateTo != nil {
-			outDT = updated.DateTo.Format("01-2006")
-		}
-
-		resp := generated.Subscription{
-			SubscriptionInput: generated.SubscriptionInput{
-				ServiceName: &name,
-				Cost:        &cost,
-				UserID:      &uid,
-				StartDate:   &outDF,
-				EndDate:     outDT,
-			},
-			SubscriptionID: generated.SubscriptionID{ID: updated.ID},
-		}
-		c.JSON(http.StatusOK, resp)
+		out := buildSubDTO(updated)
+		c.JSON(http.StatusOK, out)
 	})
 
 	r.DELETE("/subscriptions/:id", func(c *gin.Context) {
@@ -385,59 +270,35 @@ func setupSubscriptionsId(r *gin.RouterGroup, u UseCases) {
 		}
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			jsonErr(c, http.StatusBadRequest, "invalid id")
 			return
 		}
 		deleted, err := u.Sub.DeleteSub(c, id)
 		switch {
 		case errors.Is(err, usecase.ErrInvalidID):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid id"})
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid id")
 			return
-		case err != nil:
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		case deleted == nil:
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		case err != nil, deleted == nil:
+			jsonErr(c, http.StatusNotFound, "not found")
 			return
 		}
-
-		name := deleted.ServiceName
-		cost := deleted.Cost
-		uid := deleted.UserID
-		df := deleted.DateFrom.Format("01-2006")
-		var dt string
-		if deleted.DateTo != nil {
-			dt = deleted.DateTo.Format("01-2006")
-		}
-
-		resp := generated.Subscription{
-			SubscriptionInput: generated.SubscriptionInput{
-				ServiceName: &name,
-				Cost:        &cost,
-				UserID:      &uid,
-				StartDate:   &df,
-				EndDate:     dt,
-			},
-			SubscriptionID: generated.SubscriptionID{ID: deleted.ID},
-		}
-		c.JSON(http.StatusOK, resp)
+		out := buildSubDTO(deleted)
+		c.JSON(http.StatusOK, out)
 	})
 
 	r.OPTIONS("/subscriptions/:id", func(c *gin.Context) {
-		c.Writer.Header().Set("Allow", "PUT,OPTIONS,GET,DELETE")
+		c.Header("Allow", "PUT,OPTIONS,GET,DELETE")
 		c.Status(http.StatusNoContent)
 	})
 }
 
+// setupSubscriptionsCost registers aggregate cost endpoint.
 func setupSubscriptionsCost(r *gin.RouterGroup, u UseCases) {
 	methodNA := func(c *gin.Context) {
 		c.Header("Allow", "GET,OPTIONS")
-		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
+		jsonErr(c, http.StatusMethodNotAllowed, "method not allowed")
 	}
-	for _, m := range []string{
-		http.MethodPut,
-		http.MethodDelete,
-	} {
+	for _, m := range []string{http.MethodPut, http.MethodDelete} {
 		r.Handle(m, "/subscriptions/cost", methodNA)
 	}
 
@@ -446,81 +307,57 @@ func setupSubscriptionsCost(r *gin.RouterGroup, u UseCases) {
 			return
 		}
 
-		userID := strings.TrimSpace(c.Query("user_id"))
-
-		serviceName := c.Query("service_name")
-		fromStr := c.Query("start_date")
-		toStr := c.Query("end_date")
-
-		var fromTime, toTime time.Time
-		var err error
-
-		if fromTime, err = parseMonthYear(fromStr); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid start_date"})
+		fromTime, err := parseMonthYear(c.Query("start_date"))
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid start_date")
 			return
 		}
-		if toTime, err = parseMonthYear(toStr); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid end_date"})
+		toTime, err := parseMonthYear(c.Query("end_date"))
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid end_date")
 			return
 		}
 		if fromTime.After(toTime) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "from must be <= to"})
+			jsonErr(c, http.StatusUnprocessableEntity, "from must be <= to")
 			return
 		}
-		var uid uuid.UUID
-
-		if uid, err = uuid.Parse(userID); err != nil && userID != "" {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "uuid invalid"})
-			return
-		}
-
-		p := usecase.Period{
-			From: fromTime,
-			To:   toTime,
-		}
-		period := &p
 
 		f := usecase.SubFilter{
-			Period: period,
+			Period: &usecase.Period{From: fromTime, To: toTime},
 		}
 
-		if uid != uuid.Nil {
+		if userID := strings.TrimSpace(c.Query("user_id")); userID != "" {
+			uid, err := uuid.Parse(userID)
+			if err != nil {
+				jsonErr(c, http.StatusUnprocessableEntity, "uuid invalid")
+				return
+			}
 			f.UserID = strfmt.UUID(uid.String())
 		}
 
-		if serviceName != "" {
-			f.ServiceName = &serviceName
+		if sn := c.Query("service_name"); sn != "" {
+			f.ServiceName = &sn
 		}
 
 		total, err := u.Sub.CostSubsByFilter(c, f)
-
-		switch {
-		case errors.Is(err, usecase.ErrInvalidPeriod):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid period"})
-			return
-		case errors.Is(err, usecase.ErrInvalidPagination):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid pagination"})
-			return
-		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if handled := handleUsecaseErr(c, err); handled {
 			return
 		}
-
 		c.JSON(http.StatusOK, gin.H{"total": total})
 	})
 
 	r.OPTIONS("/subscriptions/cost", func(c *gin.Context) {
-		c.Writer.Header().Set("Allow", "GET,OPTIONS")
+		c.Header("Allow", "GET,OPTIONS")
 		c.Status(http.StatusNoContent)
 	})
 }
 
+// acceptsJSON checks if Accept header allows application/json.
 func acceptsJSON(h string) bool {
 	if h == "" || h == "*/*" {
 		return true
 	}
-	parts := strings.Split(h, ",")
-	for _, p := range parts {
+	for _, p := range strings.Split(h, ",") {
 		mt := strings.TrimSpace(strings.SplitN(p, ";", 2)[0])
 		if mt == "application/json" || mt == "*/*" {
 			return true
@@ -529,10 +366,65 @@ func acceptsJSON(h string) bool {
 	return false
 }
 
+// requireAcceptJSON enforces Accept: application/json.
 func requireAcceptJSON(c *gin.Context) bool {
 	if acceptsJSON(c.GetHeader("Accept")) {
 		return true
 	}
-	c.JSON(http.StatusNotAcceptable, gin.H{"error": "Accept application/json only"})
+	jsonErr(c, http.StatusNotAcceptable, "Accept application/json only")
 	return false
+}
+
+// requireJSONContent enforces Content-Type: application/json (if provided).
+func requireJSONContent(c *gin.Context) bool {
+	ct := strings.TrimSpace(c.ContentType())
+	if ct == "" || ct == "application/json" {
+		return true
+	}
+	jsonErr(c, http.StatusUnsupportedMediaType, "Use application/json")
+	return false
+}
+
+// buildSubDTO maps domain Subscription to generated transport model.
+func buildSubDTO(s *entity.Subscription) generated.Subscription {
+	name := s.ServiceName
+	cost := s.Cost
+	uid := s.UserID
+	start := s.DateFrom.Format("01-2006")
+	var end string
+	if s.DateTo != nil {
+		end = s.DateTo.Format("01-2006")
+	}
+	return generated.Subscription{
+		SubscriptionInput: generated.SubscriptionInput{
+			ServiceName: &name,
+			Cost:        &cost,
+			UserID:      &uid,
+			StartDate:   &start,
+			EndDate:     end,
+		},
+		SubscriptionID: generated.SubscriptionID{ID: s.ID},
+	}
+}
+
+// jsonErr sends a JSON error with status code.
+func jsonErr(c *gin.Context, code int, msg string) {
+	c.JSON(code, gin.H{"error": msg})
+}
+
+// handleUsecaseErr maps domain errors to HTTP responses; returns true if handled.
+func handleUsecaseErr(c *gin.Context, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, usecase.ErrInvalidID),
+		errors.Is(err, usecase.ErrInvalidSubscription),
+		errors.Is(err, usecase.ErrInvalidPagination),
+		errors.Is(err, usecase.ErrInvalidPeriod):
+		jsonErr(c, http.StatusUnprocessableEntity, strings.TrimPrefix(err.Error(), ": "))
+		return true
+	default:
+		jsonErr(c, http.StatusInternalServerError, "internal error")
+		return true
+	}
 }

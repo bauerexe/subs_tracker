@@ -24,19 +24,19 @@ var router = gin.New()
 
 type stubSubRepo struct{}
 
-func (s2 stubSubRepo) SaveSub(ctx context.Context, s *entity.Subscription) (*entity.Subscription, error) {
+func (s2 stubSubRepo) SaveSub(_ context.Context, _ *entity.Subscription) (*entity.Subscription, error) {
 	return &entity.Subscription{ID: 1}, nil
 }
 
-func (s2 stubSubRepo) UpdateSub(ctx context.Context, s *entity.Subscription) error {
+func (s2 stubSubRepo) UpdateSub(_ context.Context, _ *entity.Subscription) error {
 	return nil
 }
 
-func (s2 stubSubRepo) DeleteSub(ctx context.Context, id int64) error {
+func (s2 stubSubRepo) DeleteSub(_ context.Context, _ int64) error {
 	return nil
 }
 
-func (s2 stubSubRepo) GetSubByID(ctx context.Context, id int64) (*entity.Subscription, error) {
+func (s2 stubSubRepo) GetSubByID(_ context.Context, id int64) (*entity.Subscription, error) {
 	if id != 1 {
 		return nil, nil
 	}
@@ -53,11 +53,11 @@ func (s2 stubSubRepo) GetSubByID(ctx context.Context, id int64) (*entity.Subscri
 	}, nil
 }
 
-func (s2 stubSubRepo) ListSubsByFilter(ctx context.Context, f usecase.SubFilter) ([]*entity.Subscription, error) {
+func (s2 stubSubRepo) ListSubsByFilter(_ context.Context, _ usecase.SubFilter) ([]*entity.Subscription, error) {
 	return nil, nil
 }
 
-func (s2 stubSubRepo) CostSubsByFilter(ctx context.Context, f usecase.SubFilter) (int64, error) {
+func (s2 stubSubRepo) CostSubsByFilter(_ context.Context, _ usecase.SubFilter) (int64, error) {
 	return 0, nil
 }
 
@@ -67,7 +67,7 @@ func init() {
 	)
 }
 
-// Все неизвестные пути должны возвращать http.StatusNotFound.
+// All unknown paths should return http.StatusNotFound.
 func TestUnknownRoute(t *testing.T) {
 	tests := []struct {
 		name  string

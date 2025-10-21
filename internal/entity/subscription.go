@@ -5,18 +5,18 @@ import (
 	"time"
 )
 
-// Subscription - структура хранения подписок
+// Subscription - entity with subscription information
 type Subscription struct {
-	// ID - идентификатор подписки в формате UUID
+	// ID - subscription identifier in UUID format
 	ID int64
-	// UserID - идентификатор подписанного пользователя
+	// UserID - identifier of the subscribed user
 	UserID strfmt.UUID
-	// ServiceName - название сервиса, предоставляющего подписку
+	// ServiceName - name of the service providing the subscription
 	ServiceName string
-	// Cost - стоимость месячной подписки в рублях
+	// Cost - monthly subscription cost in rubles
 	Cost int64
-	// DateFrom - дата начала подписки (месяц и год)
+	// DateFrom - subscription start date (month and year)
 	DateFrom time.Time
-	// DateTo - дата оканчания подписки (месяц и год)
+	// DateTo - subscription end date (month and year)
 	DateTo *time.Time
 }

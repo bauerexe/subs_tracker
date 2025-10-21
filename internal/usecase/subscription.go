@@ -8,17 +8,19 @@ import (
 	"time"
 )
 
+// Subscription coordinates subscription use cases via the repository
 type Subscription struct {
 	Sr SubscriptionRepository
 }
 
+// NewSubscription creates a use case service with the given repository
 func NewSubscription(sr SubscriptionRepository) *Subscription {
 	return &Subscription{
 		Sr: sr,
 	}
 }
 
-// RegisterSub - функция сохранения подписки
+// RegisterSub validates/normalizes and saves a new subscription
 func (s *Subscription) RegisterSub(ctx context.Context, sub *entity.Subscription) (*entity.Subscription, error) {
 	if err := s.validateAndNormalize(sub); err != nil {
 		return nil, err
@@ -30,7 +32,7 @@ func (s *Subscription) RegisterSub(ctx context.Context, sub *entity.Subscription
 	return created, nil
 }
 
-// UpdateSub - функция обновления подписки (обновление при совпадении ID)
+// UpdateSub validates/normalizes and updates an existing subscription by ID, returning the fresh copy
 func (s *Subscription) UpdateSub(ctx context.Context, sub *entity.Subscription) (*entity.Subscription, error) {
 	if sub == nil || sub.ID <= 0 {
 		return nil, ErrInvalidID
@@ -45,7 +47,7 @@ func (s *Subscription) UpdateSub(ctx context.Context, sub *entity.Subscription) 
 	return s.Sr.GetSubByID(ctx, sub.ID)
 }
 
-// DeleteSub - функция удаления подписки
+// DeleteSub removes a subscription by ID and returns the previously stored record
 func (s *Subscription) DeleteSub(ctx context.Context, ID int64) (*entity.Subscription, error) {
 	if ID <= 0 {
 		return nil, ErrInvalidID
@@ -61,7 +63,7 @@ func (s *Subscription) DeleteSub(ctx context.Context, ID int64) (*entity.Subscri
 	return existing, nil
 }
 
-// GetSubByID - функция получения подписки по ID
+// GetSubByID fetches a subscription by its ID
 func (s *Subscription) GetSubByID(ctx context.Context, ID int64) (*entity.Subscription, error) {
 	if ID <= 0 {
 		return nil, ErrInvalidID
@@ -69,7 +71,7 @@ func (s *Subscription) GetSubByID(ctx context.Context, ID int64) (*entity.Subscr
 	return s.Sr.GetSubByID(ctx, ID)
 }
 
-// ListSubsByFilter - функция получения списка подписок по фильтру
+// ListSubsByFilter normalizes the filter and returns matching subscriptions
 func (s *Subscription) ListSubsByFilter(ctx context.Context, filter SubFilter) ([]*entity.Subscription, error) {
 	nf, err := normalizeFilter(filter)
 	if err != nil {
@@ -78,7 +80,7 @@ func (s *Subscription) ListSubsByFilter(ctx context.Context, filter SubFilter) (
 	return s.Sr.ListSubsByFilter(ctx, nf)
 }
 
-// CostSubsByFilter - функция получения суммы стоимостей подписок по  SubFilter - фильтру
+// CostSubsByFilter normalizes the filter and returns the total cost for matching subscriptions
 func (s *Subscription) CostSubsByFilter(ctx context.Context, filter SubFilter) (int64, error) {
 	nf, err := normalizeFilter(filter)
 	if err != nil {
@@ -87,6 +89,7 @@ func (s *Subscription) CostSubsByFilter(ctx context.Context, filter SubFilter) (
 	return s.Sr.CostSubsByFilter(ctx, nf)
 }
 
+// monthStart truncates a time to the first day of its month in UTC
 func monthStart(t time.Time) time.Time {
 	if t.IsZero() {
 		return t
@@ -94,6 +97,7 @@ func monthStart(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 }
 
+// validateAndNormalize enforces business rules and aligns dates to month starts
 func (s *Subscription) validateAndNormalize(sub *entity.Subscription) error {
 	if sub == nil {
 		return fmt.Errorf("%w: nil", ErrInvalidSubscription)
@@ -123,6 +127,7 @@ func (s *Subscription) validateAndNormalize(sub *entity.Subscription) error {
 	return nil
 }
 
+// normalizeFilter validates period and pagination
 func normalizeFilter(f SubFilter) (SubFilter, error) {
 	if f.Period != nil {
 		from := monthStart(f.Period.From)
