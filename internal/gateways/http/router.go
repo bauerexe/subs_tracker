@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/go-openapi/strfmt"
 	"github.com/google/uuid"
@@ -52,58 +53,16 @@ func setupSubscription(r *gin.RouterGroup, u UseCases) {
 			return
 		}
 
-		var f usecase.SubFilter
-
-		if uidStr := c.Query("user_id"); uidStr != "" {
-			uid, err := uuid.Parse(uidStr)
-			if err != nil {
-				jsonErr(c, http.StatusUnprocessableEntity, "uuid invalid")
-				return
-			}
-			f.UserID = strfmt.UUID(uid.String())
+		filterDTO, err := buildSubscriptionsFilterFromQuery(c)
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
+			return
 		}
 
-		if svc := c.Query("service_name"); svc != "" {
-			f.ServiceName = &svc
-		}
-
-		if v := c.Query("limit"); v != "" {
-			n, err := strconv.Atoi(v)
-			if err != nil || n < 0 {
-				jsonErr(c, http.StatusUnprocessableEntity, "invalid limit")
-				return
-			}
-			f.Limit = n
-		}
-		if v := c.Query("offset"); v != "" {
-			n, err := strconv.Atoi(v)
-			if err != nil || n < 0 {
-				jsonErr(c, http.StatusUnprocessableEntity, "invalid offset")
-				return
-			}
-			f.Offset = n
-		}
-
-		fromStr, toStr := c.Query("start_date"), c.Query("end_date")
-		if fromStr != "" || toStr != "" {
-			var p usecase.Period
-			if fromStr != "" {
-				t, err := parseMonthYear(fromStr)
-				if err != nil {
-					jsonErr(c, http.StatusUnprocessableEntity, "invalid period: from")
-					return
-				}
-				p.From = t
-			}
-			if toStr != "" {
-				t, err := parseMonthYear(toStr)
-				if err != nil {
-					jsonErr(c, http.StatusUnprocessableEntity, "invalid period: to")
-					return
-				}
-				p.To = t
-			}
-			f.Period = &p
+		f, err := mapFilterDTOToUsecase(filterDTO)
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
+			return
 		}
 
 		subs, err := u.Sub.ListSubsByFilter(c, f)
@@ -307,43 +266,43 @@ func setupSubscriptionsCost(r *gin.RouterGroup, u UseCases) {
 			return
 		}
 
-		fromTime, err := parseMonthYear(c.Query("start_date"))
-		if err != nil {
+		startRaw := strings.TrimSpace(c.Query("start_date"))
+		if startRaw == "" {
 			jsonErr(c, http.StatusUnprocessableEntity, "invalid start_date")
 			return
 		}
-		toTime, err := parseMonthYear(c.Query("end_date"))
-		if err != nil {
+		endRaw := strings.TrimSpace(c.Query("end_date"))
+		if endRaw == "" {
 			jsonErr(c, http.StatusUnprocessableEntity, "invalid end_date")
 			return
 		}
-		if fromTime.After(toTime) {
-			jsonErr(c, http.StatusUnprocessableEntity, "from must be <= to")
+
+		filterDTO, err := buildSubscriptionsFilterFromQuery(c)
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 
-		f := usecase.SubFilter{
-			Period: &usecase.Period{From: fromTime, To: toTime},
+		f, err := mapFilterDTOToUsecase(filterDTO)
+		if err != nil {
+			jsonErr(c, http.StatusUnprocessableEntity, err.Error())
+			return
 		}
 
-		if userID := strings.TrimSpace(c.Query("user_id")); userID != "" {
-			uid, err := uuid.Parse(userID)
-			if err != nil {
-				jsonErr(c, http.StatusUnprocessableEntity, "uuid invalid")
-				return
-			}
-			f.UserID = strfmt.UUID(uid.String())
+		if f.Period == nil || f.Period.From.IsZero() || f.Period.To.IsZero() {
+			jsonErr(c, http.StatusUnprocessableEntity, "invalid period")
+			return
 		}
-
-		if sn := c.Query("service_name"); sn != "" {
-			f.ServiceName = &sn
+		if f.Period.From.After(f.Period.To) {
+			jsonErr(c, http.StatusUnprocessableEntity, "from must be <= to")
+			return
 		}
 
 		total, err := u.Sub.CostSubsByFilter(c, f)
 		if handled := handleUsecaseErr(c, err); handled {
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"total": total})
+		c.JSON(http.StatusOK, generated.SubscriptionsCost{Total: total})
 	})
 
 	r.OPTIONS("/subscriptions/cost", func(c *gin.Context) {
@@ -405,6 +364,101 @@ func buildSubDTO(s *entity.Subscription) generated.Subscription {
 		},
 		SubscriptionID: generated.SubscriptionID{ID: s.ID},
 	}
+}
+
+// buildSubscriptionsFilterFromQuery maps HTTP query parameters to transport filter model.
+func buildSubscriptionsFilterFromQuery(c *gin.Context) (*generated.SubscriptionsFilter, error) {
+	dto := &generated.SubscriptionsFilter{}
+
+	if uidStr := strings.TrimSpace(c.Query("user_id")); uidStr != "" {
+		uid, err := uuid.Parse(uidStr)
+		if err != nil {
+			return nil, fmt.Errorf("uuid invalid")
+		}
+		dto.UserID = strfmt.UUID(uid.String())
+	}
+
+	if svc := strings.TrimSpace(c.Query("service_name")); svc != "" {
+		dto.ServiceName = svc
+	}
+
+	if v := strings.TrimSpace(c.Query("limit")); v != "" {
+		n, err := strconv.ParseInt(v, 10, 32)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("invalid limit")
+		}
+		n32 := int32(n)
+		dto.Limit = &n32
+	}
+
+	if v := strings.TrimSpace(c.Query("offset")); v != "" {
+		n, err := strconv.ParseInt(v, 10, 32)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("invalid offset")
+		}
+		n32 := int32(n)
+		dto.Offset = &n32
+	}
+
+	start := strings.TrimSpace(c.Query("start_date"))
+	end := strings.TrimSpace(c.Query("end_date"))
+	if start != "" || end != "" {
+		dto.Period = &generated.Period{StartDate: start, EndDate: end}
+	}
+
+	if err := dto.Validate(strfmt.Default); err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+// mapFilterDTOToUsecase converts transport filter to usecase filter representation.
+func mapFilterDTOToUsecase(dto *generated.SubscriptionsFilter) (usecase.SubFilter, error) {
+	if dto == nil {
+		return usecase.SubFilter{}, nil
+	}
+
+	var f usecase.SubFilter
+	if dto.Limit != nil {
+		f.Limit = int(*dto.Limit)
+	}
+	if dto.Offset != nil {
+		f.Offset = int(*dto.Offset)
+	}
+	if dto.ServiceName != "" {
+		svc := dto.ServiceName
+		f.ServiceName = &svc
+	}
+	if dto.UserID.String() != "" {
+		f.UserID = dto.UserID
+	}
+
+	if dto.Period != nil {
+		var p usecase.Period
+		hasPeriod := false
+		if dto.Period.StartDate != "" {
+			from, err := parseMonthYear(dto.Period.StartDate)
+			if err != nil {
+				return f, fmt.Errorf("invalid period: from")
+			}
+			p.From = from
+			hasPeriod = true
+		}
+		if dto.Period.EndDate != "" {
+			to, err := parseMonthYear(dto.Period.EndDate)
+			if err != nil {
+				return f, fmt.Errorf("invalid period: to")
+			}
+			p.To = to
+			hasPeriod = true
+		}
+		if hasPeriod {
+			f.Period = &p
+		}
+	}
+
+	return f, nil
 }
 
 // jsonErr sends a JSON error with status code.
