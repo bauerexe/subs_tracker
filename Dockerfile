@@ -6,11 +6,6 @@ RUN go mod download
 
 COPY . .
 
-RUN go env -w GOPROXY=https://proxy.golang.org,direct \
- && go mod tidy \
- && go mod download \
- && go mod verify
-
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server ./cmd/server/main.go
 
 FROM gcr.io/distroless/base-debian12

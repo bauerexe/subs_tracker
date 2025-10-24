@@ -2,12 +2,12 @@ package config
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // Config - structure with all info about db
@@ -35,56 +35,136 @@ type PgConfig struct {
 	SSLMode  string `mapstructure:"POSTGRES_SSLMODE"`
 }
 
-// LoadConfig - load config from ENV_FILE in env variable or default - .env/local.env
+// LoadConfig - load config from ENV_FILE if present, falling back to the environment
 func LoadConfig() (*Config, error) {
-	v := viper.New()
+	cfg := &Config{
+		Env: "local",
+		Server: ServerConfig{
+			Host:    "0.0.0.0",
+			Port:    8080,
+			Timeout: 5 * time.Second,
+		},
+		Pg: PgConfig{
+			Host:     "postgres",
+			Port:     5432,
+			User:     "subs_user",
+			Password: "subs_password",
+			Db:       "subs_db",
+			SSLMode:  "disable",
+		},
+	}
 
 	p := os.Getenv("ENV_FILE")
 	if p == "" {
 		p = "local.env"
 	}
 
-	v.SetConfigFile(p)
-	ext := strings.ToLower(filepath.Ext(p))
+	if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+		v := viper.New()
+		v.SetConfigFile(p)
+		ext := strings.ToLower(filepath.Ext(p))
 
-	if ext == ".env" || ext == "" {
-		v.SetConfigType("env")
-	}
+		if ext == ".env" || ext == "" {
+			v.SetConfigType("env")
+		}
 
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("read config %q: %w", p, err)
-	}
+		if err = v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("read config %q: %w", p, err)
+		}
 
-	v.AutomaticEnv()
+		lookup := func(key string) (string, bool) {
+			if !v.IsSet(key) {
+				return "", false
+			}
+			return v.GetString(key), true
+		}
 
-	timeout, err := time.ParseDuration(v.GetString("HTTP_TIMEOUT"))
-	if err != nil {
-		return nil, fmt.Errorf("parse HTTP_TIMEOUT: %w", err)
-	}
+		if err = applyOverrides(cfg, lookup, fmt.Sprintf("config file %q", p)); err != nil {
+			return nil, err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("stat config %q: %w", p, err)
+	} else {
+		lookup := func(key string) (string, bool) {
+			return os.LookupEnv(key)
+		}
 
-	var cors []string
-	if s := v.GetString("HTTP_CORS_ORIGINS"); s != "" {
-		for _, it := range strings.Split(s, ",") {
-			cors = append(cors, strings.TrimSpace(it))
+		if err = applyOverrides(cfg, lookup, "environment"); err != nil {
+			return nil, err
 		}
 	}
 
-	cfg := &Config{
-		Env: v.GetString("APP_ENV"),
-		Server: ServerConfig{
-			Host:        v.GetString("HTTP_HOST"),
-			Port:        v.GetInt("HTTP_PORT"),
-			Timeout:     timeout,
-			CORSOrigins: cors,
-		},
-		Pg: PgConfig{
-			Host:     v.GetString("POSTGRES_HOST"),
-			Port:     v.GetInt("POSTGRES_PORT"),
-			User:     v.GetString("POSTGRES_USER"),
-			Password: v.GetString("POSTGRES_PASSWORD"),
-			Db:       v.GetString("POSTGRES_DB"),
-			SSLMode:  v.GetString("POSTGRES_SSLMODE"),
-		},
-	}
 	return cfg, nil
+}
+
+func applyOverrides(cfg *Config, lookup func(string) (string, bool), source string) error {
+	if v, ok := lookup("APP_ENV"); ok && strings.TrimSpace(v) != "" {
+		cfg.Env = strings.TrimSpace(v)
+	}
+
+	if v, ok := lookup("HTTP_HOST"); ok {
+		cfg.Server.Host = strings.TrimSpace(v)
+	}
+
+	if v, ok := lookup("HTTP_PORT"); ok {
+		port, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse %s HTTP_PORT: %w", source, err)
+		}
+		cfg.Server.Port = port
+	}
+
+	if v, ok := lookup("HTTP_TIMEOUT"); ok {
+		timeout, err := time.ParseDuration(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse %s HTTP_TIMEOUT: %w", source, err)
+		}
+		cfg.Server.Timeout = timeout
+	}
+
+	if v, ok := lookup("HTTP_CORS_ORIGINS"); ok {
+		raw := strings.TrimSpace(v)
+		if raw == "" {
+			cfg.Server.CORSOrigins = nil
+		} else {
+			parts := strings.Split(raw, ",")
+			cors := make([]string, 0, len(parts))
+			for _, part := range parts {
+				if s := strings.TrimSpace(part); s != "" {
+					cors = append(cors, s)
+				}
+			}
+			cfg.Server.CORSOrigins = cors
+		}
+	}
+
+	if v, ok := lookup("POSTGRES_HOST"); ok {
+		cfg.Pg.Host = strings.TrimSpace(v)
+	}
+
+	if v, ok := lookup("POSTGRES_PORT"); ok {
+		port, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse %s POSTGRES_PORT: %w", source, err)
+		}
+		cfg.Pg.Port = port
+	}
+
+	if v, ok := lookup("POSTGRES_USER"); ok {
+		cfg.Pg.User = strings.TrimSpace(v)
+	}
+
+	if v, ok := lookup("POSTGRES_PASSWORD"); ok {
+		cfg.Pg.Password = v
+	}
+
+	if v, ok := lookup("POSTGRES_DB"); ok {
+		cfg.Pg.Db = strings.TrimSpace(v)
+	}
+
+	if v, ok := lookup("POSTGRES_SSLMODE"); ok {
+		cfg.Pg.SSLMode = strings.TrimSpace(v)
+	}
+
+	return nil
 }

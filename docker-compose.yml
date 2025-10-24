@@ -1,16 +1,42 @@
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-subs_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-subs_password}
+  POSTGRES_DB: ${POSTGRES_DB:-subs_db}
+
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-local}
+  HTTP_HOST: ${HTTP_HOST:-0.0.0.0}
+  HTTP_PORT: ${HTTP_PORT:-8080}
+  HTTP_TIMEOUT: ${HTTP_TIMEOUT:-5s}
+  HTTP_CORS_ORIGINS: ${HTTP_CORS_ORIGINS:-http://localhost:8082,http://127.0.0.1:8082}
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_USER: ${POSTGRES_USER:-subs_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-subs_password}
+  POSTGRES_DB: ${POSTGRES_DB:-subs_db}
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+
 services:
   postgres:
     image: postgres:latest
     container_name: subs_pg
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      <<: *postgres-env
     ports:
-      - "${PG_PORT_HOST}:${PG_PORT_CONTAINER}"
+      - "${PG_PORT_HOST:-5433}:${PG_PORT_CONTAINER:-5432}"
     volumes:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
+
+  migrate:
+    profiles: ["manual"]
+    image: migrate/migrate:4
+    entrypoint: [ "migrate" ]
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - postgres
+    restart: "no"
 
   adminer:
     image: adminer:latest
@@ -20,17 +46,9 @@ services:
     environment:
       ADMINER_DEFAULT_SERVER: postgres
     ports:
-      - "${ADMINER_PORT_HOST}:${ADMINER_PORT_CONTAINER}"
+      - "${ADMINER_PORT_HOST:-8081}:${ADMINER_PORT_CONTAINER:-8080}"
     restart: unless-stopped
 
-  migrate:
-    image: migrate/migrate:4
-    entrypoint: [ "migrate" ]
-    volumes:
-      - ./migrations:/migrations
-    depends_on:
-      - postgres
-    restart: "no"
   tests:
     image: golang:1.24
     container_name: subs_tests
@@ -41,23 +59,19 @@ services:
     depends_on:
       - postgres
     environment:
-      ENV_FILE: /app/.env/local.env
+      <<: *app-env
       DOCKER_HOST: unix:///var/run/docker.sock
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
       TESTCONTAINERS_RYUK_DISABLED: "true"
       TESTCONTAINERS_DOCKER_SWARM_DISABLED: "true"
     command: >
       sh -c "
-        go env -w GOPROXY=https://proxy.golang.org,direct &&
-        go mod tidy &&
-        go mod download &&
-        go mod verify &&
         go test ./... -v
       "
   swagger:
     image: swaggerapi/swagger-ui
     ports:
-      - "${SWAGGER_PORT_HOST}:${SWAGGER_PORT_CONTAINER}"
+      - "${SWAGGER_PORT_HOST:-8082}:${SWAGGER_PORT_CONTAINER:-8080}"
     environment:
       SWAGGER_JSON: /api/swagger.yaml
     volumes:
@@ -71,11 +85,9 @@ services:
       tests:
         condition: service_completed_successfully
     ports:
-      - "${APP_PORT_HOST}:${APP_PORT_CONTAINER}"
+      - "${APP_PORT_HOST:-8080}:${APP_PORT_CONTAINER:-8080}"
     environment:
-      ENV_FILE: /app/.env/local.env
-    volumes:
-      - ./.env/local.env:/app/.env/local.env:ro
+      <<: *app-env
     restart: unless-stopped
 
 volumes:
