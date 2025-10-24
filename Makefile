@@ -40,7 +40,15 @@ restart:
 	$(MAKE) up
 
 migrate-up:
-	$(MIG) -path /migrations -database "$(DB_URL)" up
+	@attempt=1; \
+	until $(MIG) -path /migrations -database "$(DB_URL)" up; do \
+		code=$$?; \
+		if [ $$attempt -ge 30 ]; then echo "Migrations failed after $$attempt attempts (exit $$code)"; exit $$code; fi; \
+		echo "DB not ready yet, retry $$attempt..."; \
+		attempt=$$((attempt+1)); \
+		sleep 2; \
+	done
+
 
 migrate-down:
 	$(MIG) -path /migrations -database "$(DB_URL)" down 1

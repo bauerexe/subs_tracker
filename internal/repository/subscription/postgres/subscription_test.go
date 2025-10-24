@@ -8,7 +8,9 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/jackc/pgx/v5"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,13 +32,27 @@ import (
 
 var pgContainer *postgres.PostgresContainer
 
+func cleanup() {
+	if pgContainer != nil {
+		_ = pgContainer.Terminate(context.Background())
+	}
+}
+
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cleanup()
+		os.Exit(1)
+	}()
+
 	c, err := postgres.Run(
 		ctx,
-		"postgres:latest",
+		"postgres:16-alpine",
 		postgres.WithDatabase("subs_db"),
 		postgres.WithUsername("subs_user"),
 		postgres.WithPassword("subs_password"),
@@ -44,30 +60,34 @@ func TestMain(m *testing.M) {
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "run container: %v\n", err)
+		cleanup()
 		os.Exit(1)
 	}
 	pgContainer = c
-	defer func(pgContainer *postgres.PostgresContainer) {
-		_ = pgContainer.Terminate(context.Background())
-	}(pgContainer)
 
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "conn string: %v\n", err)
+		cleanup()
 		os.Exit(1)
 	}
 
 	migDir, err := filepath.Abs("../../../../migrations")
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "migrations path: %v\n", err)
+		cleanup()
 		os.Exit(1)
 	}
 	if err := runMigrations(connStr, "file:///"+migDir); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "migrate up: %v\n", err)
+		cleanup()
 		os.Exit(1)
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	cleanup()
+	os.Exit(code)
 }
 
 func runMigrations(connStr, srcURL string) error {
