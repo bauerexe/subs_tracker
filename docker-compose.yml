@@ -18,7 +18,7 @@ x-app-env: &app-env
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:16
     container_name: subs_pg
     environment:
       <<: *postgres-env
@@ -64,6 +64,7 @@ services:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
       TESTCONTAINERS_RYUK_DISABLED: "true"
       TESTCONTAINERS_DOCKER_SWARM_DISABLED: "true"
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
     command: >
       sh -c "
         go test ./... -v
